@@ -45,60 +45,53 @@ public class PlayerController : MonoBehaviour
 
     void HandleMovement()
     {
-        //Almacenar la direccion z + x e la camara
-        Vector3 cameraForward = camTransform.forward; // Almacena la orientacion frontal de la camara
-        Vector3 cameraRight = camTransform.right; // Almacena la orientacion lateralde la camara
+        Vector3 cameraForward = camTransform.forward;
+        Vector3 cameraRight = camTransform.right;
 
-        //Anular la orientacion en y antes del calculo de la orientacion de la camara aplicada al movimiento
         cameraForward.y = 0;
         cameraRight.y = 0;
-        cameraForward.Normalize();//El calor del float es maximo 1, por lo que no afecta a la multriplicacion de velocidad
-        cameraRight.Normalize();//El calor del float es maximo 1, por lo que no afecta a la multriplicacion de velocidad
-
-        //Se calcula y almacena la direccion x/z teniendo en cuenta la camara por el input
+        cameraForward.Normalize();
+        cameraRight.Normalize();
 
         Vector3 moveDirection = (cameraForward * moveInput.y + cameraRight * moveInput.x).normalized;
 
-        //Una vez tenemos las direccion mas el input se lo aplicamos al motor de aceleracion del rigibody
-        //Todo esto sin afectar a eje Y porque de eso se encargara el salto
-        playerRB.linearVelocity = new Vector3(moveDirection.x * speed, playerRB.linearVelocity.y, moveDirection.z * speed);
+        playerRB.linearVelocity = new Vector3(
+            moveDirection.x * speed,
+            playerRB.linearVelocity.y,
+            moveDirection.z * speed
+        );
     }
 
     void HandleRotation()
     {
-        // si no existe input, cerramos esta accion para ahorrar memoria
         if (moveInput == Vector2.zero) return;
-
-        // hay que revisar la direccion de movimiento actual del rigibody
 
         Vector3 moveDirection = new Vector3(playerRB.linearVelocity.x, 0, playerRB.linearVelocity.z);
         if (moveDirection == Vector3.zero) return;
 
-        //Almacenar la rotacion del personaje segun la direccion en la que se este moviendo
         Quaternion targetRotation = Quaternion.LookRotation(moveDirection);
-
-        //se aplica el giro
-        //suavizar el efecto de la rotacion mediante una interporlacion de angulos
         transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotSpeed * Time.fixedDeltaTime);
     }
 
     void CheckIfGrounded()
     {
-        if (isGrounded = Physics.CheckSphere(groundCheck.position, groundCheckRadius, groundLayer)) ;
+        isGrounded = Physics.CheckSphere(groundCheck.position, groundCheckRadius, groundLayer);
 
-        //elemento de visualizacion en editor OPCIONAL
+        if (isGrounded)
+            Debug.Log("TOCANDO SUELO");
     }
+
 
     void Jump()
     {
         if (isGrounded)
         {
-            //reseteamos la aceleracion en Y para que no se solape la velocidad de salto con cada salto
             playerRB.linearVelocity = new Vector3(playerRB.linearVelocity.x, 0, playerRB.linearVelocity.z);
-            //realizar el salto en si (modo impulso)
             playerRB.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
         }
     }
+
+
 
     private void OnDrawGizmosSelected()
     {
