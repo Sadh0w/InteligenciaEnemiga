@@ -768,9 +768,9 @@ MonoBehaviour:
   m_LayerMask:
     serializedVersion: 2
     m_Bits: 4294967295
-  m_UseGeometry: 0
+  m_UseGeometry: 1
   m_DefaultArea: 0
-  m_GenerateLinks: 0
+  m_GenerateLinks: 1
   m_IgnoreNavMeshAgent: 1
   m_IgnoreNavMeshObstacle: 1
   m_OverrideTileSize: 0
@@ -916,11 +916,42 @@ Transform:
   m_GameObject: {fileID: 1940260667}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 0.32, z: 26.35}
+  m_LocalPosition: {x: 0, y: 0.32, z: 21.07}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1949704130
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1949704131}
+  m_Layer: 0
+  m_Name: shoot point
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1949704131
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1949704130}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0.716}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 2102425628}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2024702785
 GameObject:
@@ -1317,6 +1348,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 613549541}
+  - {fileID: 1949704131}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &2102425629
@@ -1336,24 +1368,24 @@ MonoBehaviour:
   targetLayer:
     serializedVersion: 2
     m_Bits: 64
-  groundLayer:
+  obstacleLayer:
     serializedVersion: 2
-    m_Bits: 8
+    m_Bits: 0
+  sightRange: 18.2
+  attackRange: 11.97
+  eyeHeight: 18.26
   patrolMode: 1
-  walkPointRange: 100
+  walkPointRange: 500
   waypoints:
   - {fileID: 1940260668}
   - {fileID: 1496830931}
   - {fileID: 426775387}
-  TimeBetweenAttacks: 0
-  projectile: {fileID: 0}
-  shootPoint: {fileID: 0}
-  shootSpeedZ: 0
-  shootSpeedY: 0
-  sightRange: 0
-  attackRange: 0
-  targetInSightRange: 0
-  targetInAttackRange: 0
+  projectile: {fileID: 1380186656137554835, guid: 3a1928df5515a674684824e034f14165, type: 3}
+  shootPoint: {fileID: 1949704131}
+  shootForce: 20
+  timeBetweenAttacks: 2
+  bulletsPerBurst: 3
+  timeBetweenShots: 0.15
   aiUpdateFrequency: 0.2
 --- !u!195 &2102425630
 NavMeshAgent:

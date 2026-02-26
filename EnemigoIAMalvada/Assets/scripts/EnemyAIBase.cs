@@ -1,216 +1,224 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.AI; //libreria de navegacion AI
+using UnityEngine.AI;
 
 public enum PatrolMode
 {
-    Random, //Modo de patrulla aleatorio
-    Waypoints //Modo de patrulla por puntos a seguir en orden
+    Random,
+    Waypoints
 }
 
 public class EnemyAIBase : MonoBehaviour
 {
-    #region General Variables
+    #region Variables
+
     [Header("AI Configuration")]
-    [SerializeField] NavMeshAgent agent; //Referencia al cerebro al sistema de IA NavMeshAgent
-    [SerializeField] Transform target; //Referencia al objetivo a seguir
+    [SerializeField] NavMeshAgent agent;
+    [SerializeField] Transform target;
     [SerializeField] LayerMask targetLayer;
-    [SerializeField] LayerMask groundLayer;
+    [SerializeField] LayerMask obstacleLayer;
 
-    [Header("Patrolling Stats")]
-    [SerializeField] private PatrolMode patrolMode = PatrolMode.Random; //Modo de patrulla por defecto
-    //Variables de estados que son comunes a ambos modos de patrulla
-    Vector3 walkPoint; //Destino actual a perseguir
-    bool walkPointSet; //¿hay un punto de patrulla establecido? o tenemos que establecer uno nuevo?
+    [Header("Vision Settings")]
+    [SerializeField] float sightRange = 15f;
+    [SerializeField] float attackRange = 8f;
+    [SerializeField] float eyeHeight = 1.6f;
 
-    [Header("patrolling - Random")]
-    [SerializeField] float walkPointRange = 10f; //Define el radio de deteccion de puntos a perseguir alrededor del agente
+    [Header("Patrol")]
+    [SerializeField] PatrolMode patrolMode = PatrolMode.Random;
+    [SerializeField] float walkPointRange = 10f;
+    [SerializeField] List<Transform> waypoints;
 
-    [Header("patrolling - Waypoints")]
-    [SerializeField] private List<Transform> waypoints; //Lista de puntos a seguir en orden
-    int currentWaypointIndex = 0; //Indice del punto actual a seguir
+    int currentWaypointIndex;
+    Vector3 walkPoint;
+    bool walkPointSet;
 
-    [Header("Attack Configuration")]
-    public float TimeBetweenAttacks; //Cadencia de disparo del enemigo
-    bool alreadyAttacked; //Seguridad ante ataques infinitos
-    [SerializeField] GameObject projectile; //Prefab del proyectil a disparar
-    [SerializeField] Transform shootPoint; //Punto desde el que se dispara el proyectil
-    [SerializeField] float shootSpeedZ;
-    [SerializeField] float shootSpeedY;
+    [Header("Attack")]
+    [SerializeField] GameObject projectile;
+    [SerializeField] Transform shootPoint;
+    [SerializeField] float shootForce = 20f;
+    [SerializeField] float timeBetweenAttacks = 2f;
+    [SerializeField] int bulletsPerBurst = 3;
+    [SerializeField] float timeBetweenShots = 0.15f;
 
-    [Header("States & Detection")]
-    [SerializeField] float sightRange; //Rango de vision del enemigo a partir del cual detecta al player
-    [SerializeField] float attackRange; //Rango de vision del enemigo a partir del cual ataca al player
-    [SerializeField] bool targetInSightRange; //¿El player esta en rango de vision?3
-    [SerializeField] bool targetInAttackRange; //¿El player esta en rango de ataque?
+    bool alreadyAttacked;
 
-    [Header("Optimitzation")]
-    [SerializeField] float aiUpdateFrequency = 0.2f; //Frecuencia de actualizacion de la IA
+    [Header("Optimization")]
+    [SerializeField] float aiUpdateFrequency = 0.2f;
+
     #endregion
 
     private void Awake()
     {
         agent = GetComponent<NavMeshAgent>();
+
         if (target == null)
         {
-            GameObject playerObject = GameObject.FindGameObjectWithTag("Player");
-            if (playerObject != null)
-            {
-                target = playerObject.transform;// Asigna el player al target del enemigo
-            }
+            GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
+            if (playerObj != null)
+                target = playerObj.transform;
             else
             {
-                Debug.LogError("No se pudo encontrar objetos con tag player. Se requiere revision de tags");
-                this.enabled = false; //Desactiva el script si no encuentra Player para evitar errores
+                Debug.LogError("No Player found");
+                enabled = false;
             }
         }
     }
 
-    //Corutina de funcionamiento de la IA (CEREBRO DE LA AI)
-
     private void Start()
     {
-        //arranque de la corutina de procesamiento de la IA que sustituye al update 
         StartCoroutine(AIUpdateRoutine());
     }
 
-    private IEnumerator AIUpdateRoutine()
+    IEnumerator AIUpdateRoutine()
     {
         while (true)
         {
             yield return new WaitForSeconds(aiUpdateFrequency);
-            // Pasi 1: Comprobar la deteccion de target
-            targetInSightRange = Physics.CheckSphere(transform.position, sightRange, targetLayer);
-            targetInAttackRange = Physics.CheckSphere(transform.position, sightRange, targetLayer);
-            // Paso 2: Deteccion y cambio entre estados
-            if (targetInSightRange && targetInAttackRange)
-            {
-                //atacar
+
+            UpdateDetection();
+
+            if (targetInSight && targetInAttack)
                 AttackTarget();
-
-            }
-            else if (targetInSightRange && !targetInAttackRange)
-            {
-                //Persecucion
+            else if (targetInSight)
                 ChaseTarget();
-            }
-            else if (!targetInSightRange && !targetInAttackRange)
-            {
-                //Patrullar
+            else
                 Patrolling();
-
-            }
         }
     }
 
-    private void Update()
+    #region Detection
+
+    bool targetInSight;
+    bool targetInAttack;
+
+    void UpdateDetection()
     {
-        if (targetInSightRange) transform.LookAt(target);
+        float distance = Vector3.Distance(
+            transform.position + Vector3.up * eyeHeight,
+            target.position + Vector3.up * eyeHeight
+        );
+
+        targetInSight = distance <= sightRange;
+        targetInAttack = distance <= attackRange && HasLineOfSight();
     }
+
+    bool HasLineOfSight()
+    {
+        Vector3 origin = transform.position + Vector3.up * eyeHeight;
+        Vector3 dir = (target.position - origin).normalized;
+
+        if (Physics.Raycast(origin, dir, out RaycastHit hit, sightRange, ~obstacleLayer))
+        {
+            return hit.transform.CompareTag("Player");
+        }
+
+        return false;
+    }
+
+    #endregion
+
+    #region Patrol
 
     void Patrolling()
     {
-        //devolvemos la capacidad de moverse al agente
         if (agent.isStopped) agent.isStopped = false;
 
-        //se compreuba si el agente a llegado al punto
-        //para ello, se usa un margen de distancia pequeña + stoppingDistance para asegurarnos
-
-        if (!walkPointSet && !agent.pathPending && agent.remainingDistance <= agent.stoppingDistance + 0.1f) // si hemos llegado al punto le dec
+        if (!walkPointSet || agent.remainingDistance <= agent.stoppingDistance)
         {
-            walkPointSet = false; //Ya no tenemos punto a patrullar y se genera uno nuevo
-        }
+            walkPointSet = false;
 
-        //Se comprueba si no tenemos punto de destino por lo que buscara uno nuevo segun el modo de patrulla (Random/Puntos)
-        if (!walkPointSet)
-        {
-            switch (patrolMode)
-            {
-                case PatrolMode.Random:
-                    SearchWalkPoint_Random();
-                    break;
-                case PatrolMode.Waypoints:
-                    SearchWalkPoint_Waypoints();
-                    break;
-            }
+            if (patrolMode == PatrolMode.Random)
+                SearchWalkPoint_Random();
+            else
+                SearchWalkPoint_Waypoints();
         }
     }
 
     void SearchWalkPoint_Random()
     {
-        //GENERAR UN PUNTO DE PATRULLA (DESTINATION) ALEATORIO
-        //Paso 1: Gnerar posicion aleatoria 
-        float randomZ = Random.Range(-walkPointRange, walkPointRange);
         float randomX = Random.Range(-walkPointRange, walkPointRange);
-        Vector3 randomPoint = new Vector3(transform.position.x + randomX, transform.position.y, transform.position.z + randomZ);
+        float randomZ = Random.Range(-walkPointRange, walkPointRange);
 
-        //Paso 2: Generar el punto con la posicion determinada den formato NavMesh
-        NavMeshHit hit; //almacen de informacion de impacto de rayo solo eb bakeo de NavMesh
-        if (NavMesh.SamplePosition(randomPoint, out hit, walkPointRange, NavMesh.AllAreas)) //Si el punto aleatorio esta en la NavMesh
+        Vector3 randomPoint = new Vector3(
+            transform.position.x + randomX,
+            transform.position.y,
+            transform.position.z + randomZ
+        );
+
+        if (NavMesh.SamplePosition(randomPoint, out NavMeshHit hit, walkPointRange, NavMesh.AllAreas))
         {
-            walkPoint = hit.position; //DEFINE EL PUNTO REAL A PERSEGUIR
+            walkPoint = hit.position;
             agent.SetDestination(walkPoint);
-            walkPointSet = true; //Ya tenemos un punto de patrulla establecido
+            walkPointSet = true;
         }
     }
 
     void SearchWalkPoint_Waypoints()
     {
-        //DETECTAR LOS PUNTOS DE PATRULLA FIJOS EN UNA LISTA Y HACER BUCLE ENTRE ELLOS
-        //Paso0: Comprobar si hay puntos en la lista
         if (waypoints == null || waypoints.Count == 0)
         {
-            Debug.LogWarning("El agente funciona en modo Waypoints pero la lista es nula o no tiene espacios" + "Cambiando a modo Random.....", this);
-            patrolMode = PatrolMode.Random; //Cambia el modo de patrulla a Random si no hay puntos en la lista
+            patrolMode = PatrolMode.Random;
             return;
         }
-        //Paso1:asignar el siguiente waypoint como destino
+
         walkPoint = waypoints[currentWaypointIndex].position;
         agent.SetDestination(walkPoint);
-        walkPointSet = true; //Ya tenemos un punto de patrulla establecido
+        walkPointSet = true;
 
-        //Paso2: Cambiar el numero de espacio de la lista a perseguir
-        //.....Y en caso de llegar al final, pasarlo a 0 en forma PRO
         currentWaypointIndex = (currentWaypointIndex + 1) % waypoints.Count;
     }
 
+    #endregion
+
+    #region Combat
+
     void ChaseTarget()
     {
-        if (agent.isStopped) agent.isStopped = false;//si el agente esta detenido, lo reanudamos
-        agent.SetDestination(target.position); //Cambia el destino del agente a la position del target
+        if (agent.isStopped) agent.isStopped = false;
+        agent.SetDestination(target.position);
     }
 
     void AttackTarget()
     {
-        agent.isStopped = true; //Detiene el movimiento del agente para atacar
+        agent.isStopped = true;
 
         if (!alreadyAttacked)
-        {
-
-            Rigidbody rb = Instantiate(projectile, shootPoint.position, Quaternion.identity).GetComponent<Rigidbody>();
-            rb.AddForce(transform.forward * shootSpeedZ, ForceMode.Impulse);
-            //El siguiente addForce solo se aplica si queremos catapulta
-            //rb.AddForce(transform.forward * shootSpeedY, ForceMode.Impulse);
-
-        }
-        alreadyAttacked = true;
-        StartCoroutine(ResetAttackRoutine());
+            StartCoroutine(BurstFire());
     }
 
-    IEnumerator ResetAttackRoutine()
+    IEnumerator BurstFire()
     {
-        yield return new WaitForSeconds(TimeBetweenAttacks);
-        alreadyAttacked = false;//Permitir que el ataque se ejecute de nuevo
+        alreadyAttacked = true;
+
+        yield return new WaitForSeconds(0.2f);
+
+        for (int i = 0; i < bulletsPerBurst; i++)
+        {
+            if (projectile != null && shootPoint != null)
+            {
+                GameObject bullet = Instantiate(projectile, shootPoint.position, shootPoint.rotation);
+
+                Rigidbody rb = bullet.GetComponent<Rigidbody>();
+                if (rb != null)
+                    rb.AddForce(shootPoint.forward * shootForce, ForceMode.Impulse);
+            }
+
+            yield return new WaitForSeconds(timeBetweenShots);
+        }
+
+        yield return new WaitForSeconds(timeBetweenAttacks);
+        alreadyAttacked = false;
     }
 
+    #endregion
 
     private void OnDrawGizmosSelected()
     {
-        Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(transform.position, attackRange);
-
         Gizmos.color = Color.yellow;
         Gizmos.DrawWireSphere(transform.position, sightRange);
+
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(transform.position, attackRange);
     }
 }
