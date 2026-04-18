@@ -1500,12 +1500,12 @@ MonoBehaviour:
   obstacleLayer:
     serializedVersion: 2
     m_Bits: 256
-  sightRange: 18.2
-  fieldOfViewAngle: 90
+  sightRange: 82.7
+  fieldOfViewAngle: 67
   eyeHeight: 0.4
-  hearingRange: 6
+  hearingRange: 12.51
   minSpeedToHear: 0.5
-  attackRange: 11.97
+  attackRange: 24.3
   projectile: {fileID: 1380186656137554835, guid: 3a1928df5515a674684824e034f14165, type: 3}
   shootPoint: {fileID: 1949704131}
   shootForce: 20
