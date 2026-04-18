@@ -131,12 +131,13 @@ GameObject:
   - component: {fileID: 49321508}
   - component: {fileID: 49321507}
   - component: {fileID: 49321506}
-  m_Layer: 0
-  m_Name: Cube (2)
+  - component: {fileID: 49321510}
+  m_Layer: 8
+  m_Name: 'obstaculo '
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!65 &49321506
 BoxCollider:
@@ -230,6 +231,22 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!208 &49321510
+NavMeshObstacle:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 49321505}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Shape: 1
+  m_Extents: {x: 0.5, y: 0.5, z: 0.5}
+  m_MoveThreshold: 0.1
+  m_Carve: 1
+  m_CarveOnlyStationary: 1
+  m_Center: {x: 0, y: 0, z: 0}
+  m_TimeToStationary: 0.5
 --- !u!1 &330585543
 GameObject:
   m_ObjectHideFlags: 0
@@ -508,7 +525,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &426775387
 Transform:
@@ -810,7 +827,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &1496830931
 Transform:
@@ -1016,7 +1033,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &1940260668
 Transform:
@@ -1476,27 +1493,32 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyAIBase
   agent: {fileID: 2102425630}
   target: {fileID: 2088417879}
-  targetLayer:
+  face: {fileID: 613549541}
+  playerLayer:
     serializedVersion: 2
     m_Bits: 64
   obstacleLayer:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 256
   sightRange: 18.2
+  fieldOfViewAngle: 90
+  eyeHeight: 0.4
+  hearingRange: 6
+  minSpeedToHear: 0.5
   attackRange: 11.97
-  eyeHeight: 18.26
-  patrolMode: 1
-  walkPointRange: 500
-  waypoints:
-  - {fileID: 1940260668}
-  - {fileID: 1496830931}
-  - {fileID: 426775387}
   projectile: {fileID: 1380186656137554835, guid: 3a1928df5515a674684824e034f14165, type: 3}
   shootPoint: {fileID: 1949704131}
   shootForce: 20
   timeBetweenAttacks: 2
   bulletsPerBurst: 3
   timeBetweenShots: 0.15
+  patrolMode: 1
+  walkPointRange: 500
+  waypoints:
+  - {fileID: 1940260668}
+  - {fileID: 1496830931}
+  - {fileID: 426775387}
+  investigateWaitTime: 4
   aiUpdateFrequency: 0.2
 --- !u!195 &2102425630
 NavMeshAgent:
@@ -1532,12 +1554,13 @@ GameObject:
   - component: {fileID: 2102769052}
   - component: {fileID: 2102769051}
   - component: {fileID: 2102769050}
-  m_Layer: 0
-  m_Name: Cube (1)
+  - component: {fileID: 2102769054}
+  m_Layer: 8
+  m_Name: 'obstaculo '
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!65 &2102769050
 BoxCollider:
@@ -1631,6 +1654,22 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!208 &2102769054
+NavMeshObstacle:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2102769049}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Shape: 1
+  m_Extents: {x: 0.5, y: 0.5, z: 0.5}
+  m_MoveThreshold: 0.1
+  m_Carve: 1
+  m_CarveOnlyStationary: 1
+  m_Center: {x: 0, y: 0, z: 0}
+  m_TimeToStationary: 0.5
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
