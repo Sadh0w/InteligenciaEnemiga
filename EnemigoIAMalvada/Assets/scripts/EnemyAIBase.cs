@@ -13,11 +13,11 @@ public class EnemyAIBase : MonoBehaviour
     [Header("References")]
     [SerializeField] NavMeshAgent agent;
     [SerializeField] Transform target;
-    [SerializeField] Transform face; // el objeto Face del enemigo
+    [SerializeField] Transform face;
 
     [Header("Layers")]
-    [SerializeField] LayerMask playerLayer;     // solo la capa del Player
-    [SerializeField] LayerMask obstacleLayer;   // solo obstáculos que bloquean visión
+    [SerializeField] LayerMask playerLayer;
+    [SerializeField] LayerMask obstacleLayer;
 
     [Header("Vision")]
     [SerializeField] float sightRange = 15f;
@@ -36,6 +36,7 @@ public class EnemyAIBase : MonoBehaviour
     [SerializeField] float timeBetweenAttacks = 2f;
     [SerializeField] int bulletsPerBurst = 3;
     [SerializeField] float timeBetweenShots = 0.15f;
+    [SerializeField] float suppressionTime = 2.5f;
 
     [Header("Patrol")]
     [SerializeField] PatrolMode patrolMode = PatrolMode.Random;
@@ -44,6 +45,17 @@ public class EnemyAIBase : MonoBehaviour
 
     [Header("Investigate")]
     [SerializeField] float investigateWaitTime = 4f;
+
+    [Header("Communication")]
+    [SerializeField] float alertRadius = 20f; // radio al que avisa a otros enemigos
+
+    [Header("Animation")]
+    [SerializeField] Animator animator; // null hasta que haya modelo, no rompe nada
+
+    // Hashes son más eficientes que strings en cada frame
+    static readonly int HashSpeed = Animator.StringToHash("Speed");
+    static readonly int HashShoot = Animator.StringToHash("Shoot");
+    static readonly int HashAlert = Animator.StringToHash("Alert"); // para la animación de investigar
 
     [Header("Optimization")]
     [SerializeField] float aiUpdateFrequency = 0.15f;
@@ -58,21 +70,42 @@ public class EnemyAIBase : MonoBehaviour
 
     // Combat
     bool alreadyAttacked;
+    bool isSuppressing;
+    float suppressionTimer;
 
     // Investigate
     Vector3 lastKnownPosition;
     bool isLookingAround;
 
-    // Caché del Rigidbody del jugador para oído
-    Rigidbody targetRigidbody;
+    // Chase grace period
+    float chaseGracePeriod;
+    const float CHASE_GRACE = 1.5f;
 
-    // Para evitar que el cono falle mientras el agente gira al empezar a perseguir
-    float chaseGracePeriod = 0f;
-    const float CHASE_GRACE = 1.5f; // segundos que persigue aunque pierda el cono
+    Rigidbody targetRigidbody;
 
     #endregion
 
-    private void Awake()
+    // ─────────────────────────────────────────────
+    // API PÚBLICA para EnemyManager
+    // ─────────────────────────────────────────────
+
+    /// <summary>Devuelve true si el enemigo ya está en combate activo (Chase o Attack).</summary>
+    public bool IsCombatActive() =>
+        currentState == EnemyState.Chase || currentState == EnemyState.Attack;
+
+    /// <summary>Otro enemigo le pasa la última posición conocida del jugador.</summary>
+    public void ReceiveAlert(Vector3 position)
+    {
+        // Solo reacciona si estaba patrullando o investigando otra cosa
+        if (currentState == EnemyState.Patrol || currentState == EnemyState.Investigate)
+            EnterInvestigate(position);
+    }
+
+    // ─────────────────────────────────────────────
+    // LIFECYCLE
+    // ─────────────────────────────────────────────
+
+    void Awake()
     {
         agent = GetComponent<NavMeshAgent>();
 
@@ -92,7 +125,6 @@ public class EnemyAIBase : MonoBehaviour
             }
         }
 
-        // Busca Face automáticamente si no está asignado
         if (face == null)
         {
             Transform found = transform.Find("Face");
@@ -100,8 +132,13 @@ public class EnemyAIBase : MonoBehaviour
         }
     }
 
-    private void Start()
+    void OnEnable() => EnemyManager.Instance?.Register(this);
+    void OnDisable() => EnemyManager.Instance?.Unregister(this);
+
+    void Start()
     {
+        // Registro de seguridad por si el Manager ya existía antes del OnEnable
+        EnemyManager.Instance?.Register(this);
         StartCoroutine(AIUpdateRoutine());
     }
 
@@ -123,44 +160,37 @@ public class EnemyAIBase : MonoBehaviour
     {
         Vector3 eyePos = transform.position + Vector3.up * eyeHeight;
         Vector3 targetPos = target.position + Vector3.up * eyeHeight;
-        Vector3 dirToTarget = targetPos - eyePos;
-        float distance = dirToTarget.magnitude;
+        Vector3 dir = targetPos - eyePos;
+        float dist = dir.magnitude;
 
-        if (distance > sightRange) return false;
+        if (dist > sightRange) return false;
 
-        // Usa Face.forward si está disponible, si no transform.forward
-        Vector3 forwardDir = face != null ? face.forward : transform.forward;
-        float angle = Vector3.Angle(forwardDir, dirToTarget.normalized);
+        Vector3 fwd = face != null ? face.forward : transform.forward;
+        float angle = Vector3.Angle(fwd, dir.normalized);
         if (angle > fieldOfViewAngle * 0.5f) return false;
 
-        // Raycast contra obstáculos + player: si llega al player, ve
-        // Primero: ¿hay un obstáculo antes que el jugador?
-        LayerMask combinedMask = obstacleLayer | playerLayer;
-        if (Physics.Raycast(eyePos, dirToTarget.normalized, out RaycastHit hit, sightRange, combinedMask))
-        {
-            // Si lo primero que toca es el jugador, hay visión
-            if (((1 << hit.transform.gameObject.layer) & playerLayer) != 0)
-                return true;
-        }
+        LayerMask mask = obstacleLayer | playerLayer;
+        if (Physics.Raycast(eyePos, dir.normalized, out RaycastHit hit, sightRange, mask))
+            return ((1 << hit.transform.gameObject.layer) & playerLayer) != 0;
 
         return false;
     }
 
     bool CanHearTarget()
     {
-        float distance = Vector3.Distance(transform.position, target.position);
-        if (distance > hearingRange) return false;
+        float dist = Vector3.Distance(transform.position, target.position);
+        if (dist > hearingRange) return false;
 
         if (targetRigidbody != null)
             return targetRigidbody.linearVelocity.magnitude >= minSpeedToHear;
 
-        return true; // sin Rigidbody, detecta siempre si está en rango
+        return true;
     }
 
     bool InAttackRange()
     {
-        float distance = Vector3.Distance(transform.position, target.position);
-        return distance <= attackRange && CanSeeTarget();
+        float dist = Vector3.Distance(transform.position, target.position);
+        return dist <= attackRange && CanSeeTarget();
     }
 
     // ─────────────────────────────────────────────
@@ -172,7 +202,6 @@ public class EnemyAIBase : MonoBehaviour
         bool sees = CanSeeTarget();
         bool hears = CanHearTarget();
 
-        // Reduce el grace period en Chase
         if (currentState == EnemyState.Chase && chaseGracePeriod > 0f)
             chaseGracePeriod -= aiUpdateFrequency;
 
@@ -186,37 +215,55 @@ public class EnemyAIBase : MonoBehaviour
                 break;
 
             case EnemyState.Investigate:
-                if (sees)
-                    EnterChase();
+                if (sees) EnterChase();
                 break;
 
             case EnemyState.Chase:
                 if (sees)
                 {
                     lastKnownPosition = target.position;
-                    chaseGracePeriod = CHASE_GRACE; // resetea el timer mientras ve al jugador
+                    chaseGracePeriod = CHASE_GRACE;
+
+                    // Avisa a los enemigos cercanos cada vez que confirma visión
+                    EnemyManager.Instance?.AlertNearby(this, lastKnownPosition, alertRadius);
 
                     if (InAttackRange())
                         currentState = EnemyState.Attack;
                 }
                 else if (chaseGracePeriod <= 0f)
                 {
-                    // Solo pierde al jugador cuando expira el grace period
                     EnterInvestigate(lastKnownPosition);
                 }
                 break;
 
             case EnemyState.Attack:
-                if (!sees)
+                if (sees)
                 {
-                    if (chaseGracePeriod > 0f)
+                    lastKnownPosition = target.position;
+                    isSuppressing = false;
+                    suppressionTimer = suppressionTime;
+
+                    // También avisa mientras ataca
+                    EnemyManager.Instance?.AlertNearby(this, lastKnownPosition, alertRadius);
+
+                    if (!InAttackRange())
                         EnterChase();
-                    else
-                        EnterInvestigate(lastKnownPosition);
                 }
-                else if (!InAttackRange())
+                else if (!isSuppressing)
                 {
-                    EnterChase();
+                    // Acaba de perder visión → supresión
+                    isSuppressing = true;
+                    suppressionTimer = suppressionTime;
+                }
+                else
+                {
+                    suppressionTimer -= aiUpdateFrequency;
+
+                    if (suppressionTimer <= 0f)
+                    {
+                        isSuppressing = false;
+                        EnterInvestigate(lastKnownPosition);
+                    }
                 }
                 break;
         }
@@ -226,6 +273,7 @@ public class EnemyAIBase : MonoBehaviour
     {
         currentState = EnemyState.Chase;
         chaseGracePeriod = CHASE_GRACE;
+        isSuppressing = false;
         agent.isStopped = false;
         isLookingAround = false;
     }
@@ -234,9 +282,10 @@ public class EnemyAIBase : MonoBehaviour
     {
         lastKnownPosition = position;
         currentState = EnemyState.Investigate;
+        isSuppressing = false;
         agent.isStopped = false;
-        agent.SetDestination(lastKnownPosition);
         isLookingAround = false;
+        agent.SetDestination(lastKnownPosition);
     }
 
     // ─────────────────────────────────────────────
@@ -252,7 +301,31 @@ public class EnemyAIBase : MonoBehaviour
             case EnemyState.Chase: DoChase(); break;
             case EnemyState.Attack: DoAttack(); break;
         }
+
+        UpdateAnimator(); // siempre al final
     }
+
+    #region Animación
+
+    void UpdateAnimator()
+    {
+        if (animator == null) return; // sin modelo no hace nada, sin errores
+
+        float speed = currentState switch
+        {
+            EnemyState.Patrol => agent.velocity.magnitude,
+            EnemyState.Investigate => agent.velocity.magnitude,
+            EnemyState.Chase => agent.velocity.magnitude,
+            EnemyState.Attack => 0f,
+            _ => 0f
+        };
+
+        animator.SetFloat(HashSpeed, speed, 0.1f, Time.deltaTime); // el 0.1f suaviza la transición
+        animator.SetBool(HashShoot, currentState == EnemyState.Attack && !isSuppressing);
+        animator.SetBool(HashAlert, currentState == EnemyState.Investigate);
+    }
+
+    #endregion
 
     // ─────────────────────────────────────────────
     // PATRULLA
@@ -266,20 +339,18 @@ public class EnemyAIBase : MonoBehaviour
         {
             walkPointSet = false;
 
-            if (patrolMode == PatrolMode.Random)
-                SearchWalkPoint_Random();
-            else
-                SearchWalkPoint_Waypoints();
+            if (patrolMode == PatrolMode.Random) SearchWalkPoint_Random();
+            else SearchWalkPoint_Waypoints();
         }
     }
 
     void SearchWalkPoint_Random()
     {
-        float randomX = Random.Range(-walkPointRange, walkPointRange);
-        float randomZ = Random.Range(-walkPointRange, walkPointRange);
-        Vector3 randomPoint = transform.position + new Vector3(randomX, 0, randomZ);
+        float rx = Random.Range(-walkPointRange, walkPointRange);
+        float rz = Random.Range(-walkPointRange, walkPointRange);
+        Vector3 pt = transform.position + new Vector3(rx, 0, rz);
 
-        if (NavMesh.SamplePosition(randomPoint, out NavMeshHit hit, walkPointRange, NavMesh.AllAreas))
+        if (NavMesh.SamplePosition(pt, out NavMeshHit hit, walkPointRange, NavMesh.AllAreas))
         {
             walkPoint = hit.position;
             agent.SetDestination(walkPoint);
@@ -322,46 +393,36 @@ public class EnemyAIBase : MonoBehaviour
         Quaternion leftRot = originalRot * Quaternion.Euler(0, -60f, 0);
         Quaternion rightRot = originalRot * Quaternion.Euler(0, 60f, 0);
 
-        // Mira a la izquierda
         yield return StartCoroutine(RotateTo(leftRot, 0.6f));
         yield return new WaitForSeconds(0.5f);
-
         if (currentState != EnemyState.Investigate) yield break;
 
-        // Mira a la derecha
         yield return StartCoroutine(RotateTo(rightRot, 0.8f));
         yield return new WaitForSeconds(0.5f);
-
         if (currentState != EnemyState.Investigate) yield break;
 
-        // Vuelve al centro
         yield return StartCoroutine(RotateTo(originalRot, 0.4f));
-
         if (currentState != EnemyState.Investigate) yield break;
 
-        // No encontró nada, vuelve a patrullar
         isLookingAround = false;
         walkPointSet = false;
         currentState = EnemyState.Patrol;
         agent.isStopped = false;
     }
 
-    IEnumerator RotateTo(Quaternion target, float duration)
+    IEnumerator RotateTo(Quaternion to, float duration)
     {
-        Quaternion start = transform.rotation;
+        Quaternion from = transform.rotation;
         float elapsed = 0f;
 
         while (elapsed < duration)
         {
-            // Sale si el estado cambió
             if (currentState != EnemyState.Investigate) yield break;
-
             elapsed += Time.deltaTime;
-            transform.rotation = Quaternion.Slerp(start, target, elapsed / duration);
+            transform.rotation = Quaternion.Slerp(from, to, elapsed / duration);
             yield return null;
         }
-
-        transform.rotation = target;
+        transform.rotation = to;
     }
 
     // ─────────────────────────────────────────────
@@ -382,8 +443,9 @@ public class EnemyAIBase : MonoBehaviour
     {
         agent.isStopped = true;
 
-        // Mira al jugador suavemente
-        Vector3 lookDir = target.position - transform.position;
+        // En supresión mira al LKP, si no al jugador
+        Vector3 lookTarget = isSuppressing ? lastKnownPosition : target.position;
+        Vector3 lookDir = lookTarget - transform.position;
         lookDir.y = 0;
         if (lookDir != Vector3.zero)
             transform.rotation = Quaternion.Slerp(
@@ -400,32 +462,43 @@ public class EnemyAIBase : MonoBehaviour
     {
         alreadyAttacked = true;
 
+        int shots = isSuppressing ? 1 : bulletsPerBurst;
+        float cooldown = isSuppressing ? timeBetweenAttacks * 1.8f : timeBetweenAttacks;
+
         yield return new WaitForSeconds(0.2f);
 
-        for (int i = 0; i < bulletsPerBurst; i++)
+        for (int i = 0; i < shots; i++)
         {
             if (currentState != EnemyState.Attack) break;
 
             if (projectile != null && shootPoint != null)
             {
-                GameObject bullet = Instantiate(projectile, shootPoint.position, shootPoint.rotation);
+                Quaternion shootRot = isSuppressing
+                    ? Quaternion.LookRotation(
+                        (lastKnownPosition + Vector3.up - shootPoint.position).normalized)
+                        * Quaternion.Euler(
+                            Random.Range(-5f, 5f),
+                            Random.Range(-8f, 8f), 0)
+                    : shootPoint.rotation;
+
+                GameObject bullet = Instantiate(projectile, shootPoint.position, shootRot);
                 Rigidbody rb = bullet.GetComponent<Rigidbody>();
                 if (rb != null)
-                    rb.AddForce(shootPoint.forward * shootForce, ForceMode.Impulse);
+                    rb.AddForce(shootRot * Vector3.forward * shootForce, ForceMode.Impulse);
             }
 
             yield return new WaitForSeconds(timeBetweenShots);
         }
 
-        yield return new WaitForSeconds(timeBetweenAttacks);
+        yield return new WaitForSeconds(cooldown);
         alreadyAttacked = false;
     }
 
     // ─────────────────────────────────────────────
-    // GIZMOS — visibles en Scene view
+    // GIZMOS
     // ─────────────────────────────────────────────
 
-    private void OnDrawGizmosSelected()
+    void OnDrawGizmosSelected()
     {
         Vector3 eyePos = transform.position + Vector3.up * eyeHeight;
         Vector3 fwd = face != null ? face.forward : transform.forward;
@@ -433,19 +506,23 @@ public class EnemyAIBase : MonoBehaviour
         // Cono de visión
         Gizmos.color = Color.yellow;
         Gizmos.DrawWireSphere(transform.position, sightRange);
-        Vector3 left = Quaternion.Euler(0, -fieldOfViewAngle * 0.5f, 0) * fwd * sightRange;
-        Vector3 right = Quaternion.Euler(0, fieldOfViewAngle * 0.5f, 0) * fwd * sightRange;
+        Vector3 leftEdge = Quaternion.Euler(0, -fieldOfViewAngle * 0.5f, 0) * fwd * sightRange;
+        Vector3 rightEdge = Quaternion.Euler(0, fieldOfViewAngle * 0.5f, 0) * fwd * sightRange;
         Gizmos.color = new Color(1f, 1f, 0f, 0.25f);
-        Gizmos.DrawLine(eyePos, eyePos + left);
-        Gizmos.DrawLine(eyePos, eyePos + right);
+        Gizmos.DrawLine(eyePos, eyePos + leftEdge);
+        Gizmos.DrawLine(eyePos, eyePos + rightEdge);
 
-        // Radio de oído
+        // Oído
         Gizmos.color = new Color(0.2f, 0.6f, 1f, 0.35f);
         Gizmos.DrawWireSphere(transform.position, hearingRange);
 
-        // Rango de ataque
+        // Ataque
         Gizmos.color = Color.red;
         Gizmos.DrawWireSphere(transform.position, attackRange);
+
+        // Radio de alerta a otros enemigos
+        Gizmos.color = new Color(1f, 0.4f, 0f, 0.2f);
+        Gizmos.DrawWireSphere(transform.position, alertRadius);
 
         // LKP
         if (Application.isPlaying && currentState == EnemyState.Investigate)
