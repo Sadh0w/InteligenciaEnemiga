@@ -17,7 +17,8 @@ public class EnemyAIBase : MonoBehaviour
 
     [Header("Layers")]
     [SerializeField] LayerMask playerLayer;
-    [SerializeField] LayerMask obstacleLayer;
+    // Asigna aquí la layer "Wall" o la que uses para geometría que tapa la vista.
+    [SerializeField] LayerMask visionBlockerLayer;
 
     [Header("Vision")]
     [SerializeField] float sightRange = 15f;
@@ -47,15 +48,17 @@ public class EnemyAIBase : MonoBehaviour
     [SerializeField] float investigateWaitTime = 4f;
 
     [Header("Communication")]
-    [SerializeField] float alertRadius = 20f; // radio al que avisa a otros enemigos
+    [SerializeField] float alertRadius = 20f;
+    // Grupo al que pertenece. Enemigos del mismo grupo se comunican entre sí
+    // si el grupo tiene comunicación activa en EnemyManager.
+    [SerializeField] int groupID = 0;
 
     [Header("Animation")]
-    [SerializeField] Animator animator; // null hasta que haya modelo, no rompe nada
+    [SerializeField] Animator animator;
 
-    // Hashes son más eficientes que strings en cada frame
     static readonly int HashSpeed = Animator.StringToHash("Speed");
     static readonly int HashShoot = Animator.StringToHash("Shoot");
-    static readonly int HashAlert = Animator.StringToHash("Alert"); // para la animación de investigar
+    static readonly int HashAlert = Animator.StringToHash("Alert");
 
     [Header("Optimization")]
     [SerializeField] float aiUpdateFrequency = 0.15f;
@@ -77,7 +80,7 @@ public class EnemyAIBase : MonoBehaviour
     Vector3 lastKnownPosition;
     bool isLookingAround;
 
-    // Chase grace period
+    // Chase
     float chaseGracePeriod;
     const float CHASE_GRACE = 1.5f;
 
@@ -85,25 +88,42 @@ public class EnemyAIBase : MonoBehaviour
 
     #endregion
 
-    // ─────────────────────────────────────────────
-    // API PÚBLICA para EnemyManager
-    // ─────────────────────────────────────────────
+    #region Public API
+
+    /// <summary>GroupID expuesto para que EnemyManager pueda leerlo y asignarlo.</summary>
+    public int GroupID
+    {
+        get => groupID;
+        set => groupID = value;
+    }
 
     /// <summary>Devuelve true si el enemigo ya está en combate activo (Chase o Attack).</summary>
     public bool IsCombatActive() =>
         currentState == EnemyState.Chase || currentState == EnemyState.Attack;
 
-    /// <summary>Otro enemigo le pasa la última posición conocida del jugador.</summary>
+    /// <summary>
+    /// Alerta de posición: otro enemigo oyó algo o perdió al jugador en ese punto.
+    /// El receptor va a investigar si no estaba ya en combate.
+    /// </summary>
     public void ReceiveAlert(Vector3 position)
     {
-        // Solo reacciona si estaba patrullando o investigando otra cosa
         if (currentState == EnemyState.Patrol || currentState == EnemyState.Investigate)
             EnterInvestigate(position);
     }
 
-    // ─────────────────────────────────────────────
-    // LIFECYCLE
-    // ─────────────────────────────────────────────
+    /// <summary>
+    /// Alerta de combate: otro enemigo del grupo tiene al jugador en visión ahora mismo.
+    /// Cancela cualquier investigación en curso y entra directamente en Chase.
+    /// </summary>
+    public void ReceivePlayerSpotted()
+    {
+        if (currentState != EnemyState.Attack)
+            EnterChase();
+    }
+
+    #endregion
+
+    #region Lifecycle
 
     void Awake()
     {
@@ -137,7 +157,6 @@ public class EnemyAIBase : MonoBehaviour
 
     void Start()
     {
-        // Registro de seguridad por si el Manager ya existía antes del OnEnable
         EnemyManager.Instance?.Register(this);
         StartCoroutine(AIUpdateRoutine());
     }
@@ -152,10 +171,15 @@ public class EnemyAIBase : MonoBehaviour
         }
     }
 
-    // ─────────────────────────────────────────────
-    // DETECCIÓN
-    // ─────────────────────────────────────────────
+    #endregion
 
+    #region Detection
+
+    /// <summary>
+    /// Visión completa: comprueba distancia, ángulo del cono y línea de visión.
+    /// Los objetos en visionBlockerLayer tapan la vista aunque el jugador esté en rango.
+    /// El raycast evalúa primero lo que toca: si es pared → no ve; si es jugador → ve.
+    /// </summary>
     bool CanSeeTarget()
     {
         Vector3 eyePos = transform.position + Vector3.up * eyeHeight;
@@ -169,8 +193,25 @@ public class EnemyAIBase : MonoBehaviour
         float angle = Vector3.Angle(fwd, dir.normalized);
         if (angle > fieldOfViewAngle * 0.5f) return false;
 
-        LayerMask mask = obstacleLayer | playerLayer;
+        LayerMask mask = visionBlockerLayer | playerLayer;
         if (Physics.Raycast(eyePos, dir.normalized, out RaycastHit hit, sightRange, mask))
+            return ((1 << hit.transform.gameObject.layer) & playerLayer) != 0;
+
+        return false;
+    }
+
+    /// <summary>
+    /// Línea de visión pura sin cono. Solo comprueba si hay pared entre el
+    /// enemigo y el jugador. Se usa en combate para validar cada disparo.
+    /// </summary>
+    bool HasLineOfSight()
+    {
+        Vector3 origin = transform.position + Vector3.up * eyeHeight;
+        Vector3 targetPos = target.position + Vector3.up * eyeHeight;
+        Vector3 dir = targetPos - origin;
+
+        LayerMask mask = visionBlockerLayer | playerLayer;
+        if (Physics.Raycast(origin, dir.normalized, out RaycastHit hit, sightRange, mask))
             return ((1 << hit.transform.gameObject.layer) & playerLayer) != 0;
 
         return false;
@@ -193,9 +234,9 @@ public class EnemyAIBase : MonoBehaviour
         return dist <= attackRange && CanSeeTarget();
     }
 
-    // ─────────────────────────────────────────────
-    // MÁQUINA DE ESTADOS
-    // ─────────────────────────────────────────────
+    #endregion
+
+    #region State Machine
 
     void UpdateState()
     {
@@ -224,8 +265,8 @@ public class EnemyAIBase : MonoBehaviour
                     lastKnownPosition = target.position;
                     chaseGracePeriod = CHASE_GRACE;
 
-                    // Avisa a los enemigos cercanos cada vez que confirma visión
-                    EnemyManager.Instance?.AlertNearby(this, lastKnownPosition, alertRadius);
+                    // combatAlert = true: los receptores van directo a Chase
+                    EnemyManager.Instance?.AlertNearby(this, lastKnownPosition, alertRadius, combatAlert: true);
 
                     if (InAttackRange())
                         currentState = EnemyState.Attack;
@@ -237,28 +278,34 @@ public class EnemyAIBase : MonoBehaviour
                 break;
 
             case EnemyState.Attack:
+                bool losNow = HasLineOfSight();
+
                 if (sees)
                 {
                     lastKnownPosition = target.position;
                     isSuppressing = false;
                     suppressionTimer = suppressionTime;
-
-                    // También avisa mientras ataca
-                    EnemyManager.Instance?.AlertNearby(this, lastKnownPosition, alertRadius);
+                    EnemyManager.Instance?.AlertNearby(this, lastKnownPosition, alertRadius, combatAlert: true);
 
                     if (!InAttackRange())
                         EnterChase();
                 }
-                else if (!isSuppressing)
+                else if (losNow) // LOS pero fuera del cono (movimiento lateral) → perseguir
                 {
-                    // Acaba de perder visión → supresión
+                    isSuppressing = false;
+                    EnterChase();
+                }
+                else if (!isSuppressing) // perdió LOS por pared → supresión
+                {
                     isSuppressing = true;
                     suppressionTimer = suppressionTime;
+
+                    // Avisa de posición (no combate activo) para que otros investiguen
+                    EnemyManager.Instance?.AlertNearby(this, lastKnownPosition, alertRadius, combatAlert: false);
                 }
-                else
+                else // suprimiendo: cuenta atrás
                 {
                     suppressionTimer -= aiUpdateFrequency;
-
                     if (suppressionTimer <= 0f)
                     {
                         isSuppressing = false;
@@ -276,6 +323,9 @@ public class EnemyAIBase : MonoBehaviour
         isSuppressing = false;
         agent.isStopped = false;
         isLookingAround = false;
+
+        // Cancela el LookAroundRoutine si estaba activo
+        StopCoroutine(nameof(LookAroundRoutine));
     }
 
     void EnterInvestigate(Vector3 position)
@@ -288,9 +338,9 @@ public class EnemyAIBase : MonoBehaviour
         agent.SetDestination(lastKnownPosition);
     }
 
-    // ─────────────────────────────────────────────
-    // EJECUCIÓN DE ESTADOS
-    // ─────────────────────────────────────────────
+    #endregion
+
+    #region State Execution
 
     void ExecuteState()
     {
@@ -302,34 +352,12 @@ public class EnemyAIBase : MonoBehaviour
             case EnemyState.Attack: DoAttack(); break;
         }
 
-        UpdateAnimator(); // siempre al final
-    }
-
-    #region Animación
-
-    void UpdateAnimator()
-    {
-        if (animator == null) return; // sin modelo no hace nada, sin errores
-
-        float speed = currentState switch
-        {
-            EnemyState.Patrol => agent.velocity.magnitude,
-            EnemyState.Investigate => agent.velocity.magnitude,
-            EnemyState.Chase => agent.velocity.magnitude,
-            EnemyState.Attack => 0f,
-            _ => 0f
-        };
-
-        animator.SetFloat(HashSpeed, speed, 0.1f, Time.deltaTime); // el 0.1f suaviza la transición
-        animator.SetBool(HashShoot, currentState == EnemyState.Attack && !isSuppressing);
-        animator.SetBool(HashAlert, currentState == EnemyState.Investigate);
+        UpdateAnimator();
     }
 
     #endregion
 
-    // ─────────────────────────────────────────────
-    // PATRULLA
-    // ─────────────────────────────────────────────
+    #region Patrol
 
     void DoPatrol()
     {
@@ -372,16 +400,16 @@ public class EnemyAIBase : MonoBehaviour
         currentWaypointIndex = (currentWaypointIndex + 1) % waypoints.Count;
     }
 
-    // ─────────────────────────────────────────────
-    // INVESTIGAR
-    // ─────────────────────────────────────────────
+    #endregion
+
+    #region Investigate
 
     void DoInvestigate()
     {
         if (agent.remainingDistance <= agent.stoppingDistance && !isLookingAround)
         {
             isLookingAround = true;
-            StartCoroutine(LookAroundRoutine());
+            StartCoroutine(nameof(LookAroundRoutine));
         }
     }
 
@@ -422,12 +450,13 @@ public class EnemyAIBase : MonoBehaviour
             transform.rotation = Quaternion.Slerp(from, to, elapsed / duration);
             yield return null;
         }
+
         transform.rotation = to;
     }
 
-    // ─────────────────────────────────────────────
-    // PERSEGUIR
-    // ─────────────────────────────────────────────
+    #endregion
+
+    #region Chase
 
     void DoChase()
     {
@@ -435,15 +464,14 @@ public class EnemyAIBase : MonoBehaviour
         agent.SetDestination(target.position);
     }
 
-    // ─────────────────────────────────────────────
-    // ATACAR
-    // ─────────────────────────────────────────────
+    #endregion
+
+    #region Attack
 
     void DoAttack()
     {
         agent.isStopped = true;
 
-        // En supresión mira al LKP, si no al jugador
         Vector3 lookTarget = isSuppressing ? lastKnownPosition : target.position;
         Vector3 lookDir = lookTarget - transform.position;
         lookDir.y = 0;
@@ -462,8 +490,9 @@ public class EnemyAIBase : MonoBehaviour
     {
         alreadyAttacked = true;
 
-        int shots = isSuppressing ? 1 : bulletsPerBurst;
-        float cooldown = isSuppressing ? timeBetweenAttacks * 1.8f : timeBetweenAttacks;
+        bool wasSupressing = isSuppressing;
+        int shots = wasSupressing ? 1 : bulletsPerBurst;
+        float cooldown = wasSupressing ? timeBetweenAttacks * 1.8f : timeBetweenAttacks;
 
         yield return new WaitForSeconds(0.2f);
 
@@ -471,14 +500,15 @@ public class EnemyAIBase : MonoBehaviour
         {
             if (currentState != EnemyState.Attack) break;
 
+            bool canShoot = wasSupressing || HasLineOfSight();
+            if (!canShoot) break;
+
             if (projectile != null && shootPoint != null)
             {
-                Quaternion shootRot = isSuppressing
+                Quaternion shootRot = wasSupressing
                     ? Quaternion.LookRotation(
                         (lastKnownPosition + Vector3.up - shootPoint.position).normalized)
-                        * Quaternion.Euler(
-                            Random.Range(-5f, 5f),
-                            Random.Range(-8f, 8f), 0)
+                        * Quaternion.Euler(Random.Range(-5f, 5f), Random.Range(-8f, 8f), 0)
                     : shootPoint.rotation;
 
                 GameObject bullet = Instantiate(projectile, shootPoint.position, shootRot);
@@ -494,9 +524,31 @@ public class EnemyAIBase : MonoBehaviour
         alreadyAttacked = false;
     }
 
-    // ─────────────────────────────────────────────
-    // GIZMOS
-    // ─────────────────────────────────────────────
+    #endregion
+
+    #region Animation
+
+    void UpdateAnimator()
+    {
+        if (animator == null) return;
+
+        float speed = currentState switch
+        {
+            EnemyState.Patrol => agent.velocity.magnitude,
+            EnemyState.Investigate => agent.velocity.magnitude,
+            EnemyState.Chase => agent.velocity.magnitude,
+            EnemyState.Attack => 0f,
+            _ => 0f
+        };
+
+        animator.SetFloat(HashSpeed, speed, 0.1f, Time.deltaTime);
+        animator.SetBool(HashShoot, currentState == EnemyState.Attack && !isSuppressing);
+        animator.SetBool(HashAlert, currentState == EnemyState.Investigate);
+    }
+
+    #endregion
+
+    #region Gizmos
 
     void OnDrawGizmosSelected()
     {
@@ -516,15 +568,15 @@ public class EnemyAIBase : MonoBehaviour
         Gizmos.color = new Color(0.2f, 0.6f, 1f, 0.35f);
         Gizmos.DrawWireSphere(transform.position, hearingRange);
 
-        // Ataque
+        // Rango de ataque
         Gizmos.color = Color.red;
         Gizmos.DrawWireSphere(transform.position, attackRange);
 
-        // Radio de alerta a otros enemigos
+        // Radio de alerta
         Gizmos.color = new Color(1f, 0.4f, 0f, 0.2f);
         Gizmos.DrawWireSphere(transform.position, alertRadius);
 
-        // LKP
+        // LKP solo en Play
         if (Application.isPlaying && currentState == EnemyState.Investigate)
         {
             Gizmos.color = Color.magenta;
@@ -532,4 +584,6 @@ public class EnemyAIBase : MonoBehaviour
             Gizmos.DrawLine(transform.position, lastKnownPosition);
         }
     }
+
+    #endregion
 }
