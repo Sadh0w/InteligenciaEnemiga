@@ -17,13 +17,17 @@ public class EnemyAIBase : MonoBehaviour
 
     [Header("Layers")]
     [SerializeField] LayerMask playerLayer;
-    // Asigna aquí la layer "Wall" o la que uses para geometría que tapa la vista.
+    // Layer de los objetos que tapan la vista (paredes, obstáculos sólidos).
+    // El GameObject pared DEBE tener esta layer asignada en su Inspector.
     [SerializeField] LayerMask visionBlockerLayer;
 
     [Header("Vision")]
     [SerializeField] float sightRange = 15f;
     [SerializeField][Range(10f, 180f)] float fieldOfViewAngle = 90f;
     [SerializeField] float eyeHeight = 1.6f;
+    // Radio del SphereCast. Un valor pequeño (0.05-0.1) evita que el rayo
+    // se cuele en paredes muy finas sin afectar la precisión de la detección.
+    [SerializeField][Range(0.01f, 0.2f)] float visionSphereRadius = 0.05f;
 
     [Header("Hearing")]
     [SerializeField] float hearingRange = 6f;
@@ -49,8 +53,6 @@ public class EnemyAIBase : MonoBehaviour
 
     [Header("Communication")]
     [SerializeField] float alertRadius = 20f;
-    // Grupo al que pertenece. Enemigos del mismo grupo se comunican entre sí
-    // si el grupo tiene comunicación activa en EnemyManager.
     [SerializeField] int groupID = 0;
 
     [Header("Animation")]
@@ -59,6 +61,10 @@ public class EnemyAIBase : MonoBehaviour
     static readonly int HashSpeed = Animator.StringToHash("Speed");
     static readonly int HashShoot = Animator.StringToHash("Shoot");
     static readonly int HashAlert = Animator.StringToHash("Alert");
+
+    [Header("Debug")]
+    // Activa esto en el Inspector para ver el rayo de visión en tiempo real durante Play.
+    [SerializeField] bool showDebugRays = true;
 
     [Header("Optimization")]
     [SerializeField] float aiUpdateFrequency = 0.15f;
@@ -90,31 +96,21 @@ public class EnemyAIBase : MonoBehaviour
 
     #region Public API
 
-    /// <summary>GroupID expuesto para que EnemyManager pueda leerlo y asignarlo.</summary>
     public int GroupID
     {
         get => groupID;
         set => groupID = value;
     }
 
-    /// <summary>Devuelve true si el enemigo ya está en combate activo (Chase o Attack).</summary>
     public bool IsCombatActive() =>
         currentState == EnemyState.Chase || currentState == EnemyState.Attack;
 
-    /// <summary>
-    /// Alerta de posición: otro enemigo oyó algo o perdió al jugador en ese punto.
-    /// El receptor va a investigar si no estaba ya en combate.
-    /// </summary>
     public void ReceiveAlert(Vector3 position)
     {
         if (currentState == EnemyState.Patrol || currentState == EnemyState.Investigate)
             EnterInvestigate(position);
     }
 
-    /// <summary>
-    /// Alerta de combate: otro enemigo del grupo tiene al jugador en visión ahora mismo.
-    /// Cancela cualquier investigación en curso y entra directamente en Chase.
-    /// </summary>
     public void ReceivePlayerSpotted()
     {
         if (currentState != EnemyState.Attack)
@@ -139,7 +135,7 @@ public class EnemyAIBase : MonoBehaviour
             }
             else
             {
-                Debug.LogError("No Player found");
+                Debug.LogError("EnemyAIBase: no se encontró ningún GameObject con tag 'Player'.");
                 enabled = false;
                 return;
             }
@@ -176,9 +172,8 @@ public class EnemyAIBase : MonoBehaviour
     #region Detection
 
     /// <summary>
-    /// Visión completa: comprueba distancia, ángulo del cono y línea de visión.
-    /// Los objetos en visionBlockerLayer tapan la vista aunque el jugador esté en rango.
-    /// El raycast evalúa primero lo que toca: si es pared → no ve; si es jugador → ve.
+    /// Visión completa: distancia + ángulo de cono + SphereCast contra bloqueadores.
+    /// Usa SphereCast en vez de Raycast para detectar paredes muy finas de forma fiable.
     /// </summary>
     bool CanSeeTarget()
     {
@@ -193,16 +188,11 @@ public class EnemyAIBase : MonoBehaviour
         float angle = Vector3.Angle(fwd, dir.normalized);
         if (angle > fieldOfViewAngle * 0.5f) return false;
 
-        LayerMask mask = visionBlockerLayer | playerLayer;
-        if (Physics.Raycast(eyePos, dir.normalized, out RaycastHit hit, sightRange, mask))
-            return ((1 << hit.transform.gameObject.layer) & playerLayer) != 0;
-
-        return false;
+        return CheckLineOfSight(eyePos, dir.normalized, dist);
     }
 
     /// <summary>
-    /// Línea de visión pura sin cono. Solo comprueba si hay pared entre el
-    /// enemigo y el jugador. Se usa en combate para validar cada disparo.
+    /// Línea de visión pura sin cono. Usado en combate para validar cada disparo.
     /// </summary>
     bool HasLineOfSight()
     {
@@ -210,11 +200,48 @@ public class EnemyAIBase : MonoBehaviour
         Vector3 targetPos = target.position + Vector3.up * eyeHeight;
         Vector3 dir = targetPos - origin;
 
-        LayerMask mask = visionBlockerLayer | playerLayer;
-        if (Physics.Raycast(origin, dir.normalized, out RaycastHit hit, sightRange, mask))
-            return ((1 << hit.transform.gameObject.layer) & playerLayer) != 0;
+        return CheckLineOfSight(origin, dir.normalized, dir.magnitude);
+    }
 
-        return false;
+    /// <summary>
+    /// Núcleo de detección. Usa SphereCast para no fallar con paredes finas.
+    /// El primer objeto tocado decide: si es jugador → ve; si es bloqueador → no ve.
+    /// Debug.DrawRay muestra el resultado en el Scene view durante Play.
+    /// </summary>
+    bool CheckLineOfSight(Vector3 origin, Vector3 direction, float distance)
+    {
+        LayerMask mask = visionBlockerLayer | playerLayer;
+        bool result = false;
+        Color debugColor;
+
+        if (Physics.SphereCast(origin, visionSphereRadius, direction,
+                               out RaycastHit hit, distance, mask))
+        {
+            result = ((1 << hit.transform.gameObject.layer) & playerLayer) != 0;
+
+            if (showDebugRays)
+            {
+                // Verde hasta el hit si ve al jugador, rojo si hay bloqueador
+                debugColor = result ? Color.green : Color.red;
+                Debug.DrawLine(origin, hit.point, debugColor, aiUpdateFrequency);
+
+                if (!result)
+                {
+                    // Muestra qué objeto está bloqueando
+                    Debug.DrawLine(hit.point, origin + direction * distance,
+                                   new Color(1f, 0.5f, 0f), aiUpdateFrequency);
+                }
+            }
+        }
+        else
+        {
+            // No golpeó nada → el jugador no está en la máscara o fuera de rango
+            if (showDebugRays)
+                Debug.DrawLine(origin, origin + direction * distance,
+                               Color.gray, aiUpdateFrequency);
+        }
+
+        return result;
     }
 
     bool CanHearTarget()
@@ -249,10 +276,8 @@ public class EnemyAIBase : MonoBehaviour
         switch (currentState)
         {
             case EnemyState.Patrol:
-                if (sees)
-                    EnterChase();
-                else if (hears)
-                    EnterInvestigate(target.position);
+                if (sees) EnterChase();
+                else if (hears) EnterInvestigate(target.position);
                 break;
 
             case EnemyState.Investigate:
@@ -264,8 +289,6 @@ public class EnemyAIBase : MonoBehaviour
                 {
                     lastKnownPosition = target.position;
                     chaseGracePeriod = CHASE_GRACE;
-
-                    // combatAlert = true: los receptores van directo a Chase
                     EnemyManager.Instance?.AlertNearby(this, lastKnownPosition, alertRadius, combatAlert: true);
 
                     if (InAttackRange())
@@ -287,23 +310,20 @@ public class EnemyAIBase : MonoBehaviour
                     suppressionTimer = suppressionTime;
                     EnemyManager.Instance?.AlertNearby(this, lastKnownPosition, alertRadius, combatAlert: true);
 
-                    if (!InAttackRange())
-                        EnterChase();
+                    if (!InAttackRange()) EnterChase();
                 }
-                else if (losNow) // LOS pero fuera del cono (movimiento lateral) → perseguir
+                else if (losNow)
                 {
                     isSuppressing = false;
                     EnterChase();
                 }
-                else if (!isSuppressing) // perdió LOS por pared → supresión
+                else if (!isSuppressing)
                 {
                     isSuppressing = true;
                     suppressionTimer = suppressionTime;
-
-                    // Avisa de posición (no combate activo) para que otros investiguen
                     EnemyManager.Instance?.AlertNearby(this, lastKnownPosition, alertRadius, combatAlert: false);
                 }
-                else // suprimiendo: cuenta atrás
+                else
                 {
                     suppressionTimer -= aiUpdateFrequency;
                     if (suppressionTimer <= 0f)
@@ -323,8 +343,6 @@ public class EnemyAIBase : MonoBehaviour
         isSuppressing = false;
         agent.isStopped = false;
         isLookingAround = false;
-
-        // Cancela el LookAroundRoutine si estaba activo
         StopCoroutine(nameof(LookAroundRoutine));
     }
 
@@ -554,15 +572,55 @@ public class EnemyAIBase : MonoBehaviour
     {
         Vector3 eyePos = transform.position + Vector3.up * eyeHeight;
         Vector3 fwd = face != null ? face.forward : transform.forward;
+        LayerMask mask = visionBlockerLayer | playerLayer;
 
-        // Cono de visión
+        // Cono de visión clipeado por obstáculos (24 rayos dentro del arco)
+        int rayCount = 24;
+        Vector3 prevPoint = Vector3.zero;
+        bool hasPrev = false;
+
+        for (int i = 0; i <= rayCount; i++)
+        {
+            float t = (float)i / rayCount;
+            float angle = Mathf.Lerp(-fieldOfViewAngle * 0.5f, fieldOfViewAngle * 0.5f, t);
+            Vector3 dir = Quaternion.Euler(0, angle, 0) * fwd;
+
+            float rayDist = sightRange;
+            bool blocked = false;
+
+            if (Physics.SphereCast(eyePos, visionSphereRadius, dir,
+                                   out RaycastHit hit, sightRange, mask))
+            {
+                rayDist = hit.distance;
+                blocked = ((1 << hit.transform.gameObject.layer) & playerLayer) == 0;
+            }
+
+            Vector3 endPoint = eyePos + dir * rayDist;
+
+            Gizmos.color = blocked
+                ? new Color(1f, 0.2f, 0.2f, 0.8f)   // rojo: bloqueado por pared
+                : new Color(1f, 1f, 0.2f, 0.5f);     // amarillo: libre
+
+            Gizmos.DrawLine(eyePos, endPoint);
+
+            if (hasPrev)
+            {
+                Gizmos.color = new Color(1f, 1f, 0f, 0.1f);
+                Gizmos.DrawLine(prevPoint, endPoint);
+            }
+
+            prevPoint = endPoint;
+            hasPrev = true;
+        }
+
+        // Bordes del cono y radio máximo
         Gizmos.color = Color.yellow;
-        Gizmos.DrawWireSphere(transform.position, sightRange);
         Vector3 leftEdge = Quaternion.Euler(0, -fieldOfViewAngle * 0.5f, 0) * fwd * sightRange;
         Vector3 rightEdge = Quaternion.Euler(0, fieldOfViewAngle * 0.5f, 0) * fwd * sightRange;
-        Gizmos.color = new Color(1f, 1f, 0f, 0.25f);
         Gizmos.DrawLine(eyePos, eyePos + leftEdge);
         Gizmos.DrawLine(eyePos, eyePos + rightEdge);
+        Gizmos.color = new Color(1f, 1f, 0f, 0.08f);
+        Gizmos.DrawWireSphere(transform.position, sightRange);
 
         // Oído
         Gizmos.color = new Color(0.2f, 0.6f, 1f, 0.35f);

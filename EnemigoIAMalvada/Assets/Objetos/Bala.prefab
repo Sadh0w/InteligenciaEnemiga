@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 6222673665704275601}
   - component: {fileID: 1919265895042127177}
   - component: {fileID: 2844478290173618020}
+  - component: {fileID: 4043930091164320835}
   m_Layer: 0
   m_Name: Bala
   m_TagString: Untagged
@@ -141,3 +142,16 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 1
+--- !u!114 &4043930091164320835
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1380186656137554835}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 96e777d378f5dfa40affb71561761444, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Bullet
+  lifetime: 4
