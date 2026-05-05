@@ -1,9 +1,7 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>
-/// Configuración de un grupo de enemigos. Visible y editable en el Inspector.
-/// </summary>
+
 [System.Serializable]
 public class EnemyGroupConfig
 {
@@ -39,10 +37,7 @@ public class EnemyManager : MonoBehaviour
         RebuildLookup();
     }
 
-    /// <summary>
-    /// Reconstruye el diccionario interno a partir de la lista serializable.
-    /// Llámalo si modificas 'groups' por código en runtime.
-    /// </summary>
+    
     public void RebuildLookup()
     {
         groupLookup.Clear();
@@ -71,10 +66,7 @@ public class EnemyManager : MonoBehaviour
 
     #region Group API
 
-    /// <summary>
-    /// Asigna un enemigo a un grupo por código (alternativa al Inspector del enemigo).
-    /// Si el grupo no existe en la lista, lo crea con comunicación activa por defecto.
-    /// </summary>
+    
     public void SetGroup(EnemyAIBase enemy, int newGroupID)
     {
         enemy.GroupID = newGroupID;
@@ -92,10 +84,7 @@ public class EnemyManager : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Activa o desactiva la comunicación de un grupo en runtime.
-    /// false = los enemigos de ese grupo actúan solos aunque estén en el mismo grupo.
-    /// </summary>
+   
     public void SetGroupCommunication(int groupID, bool canCommunicate)
     {
         if (groupLookup.TryGetValue(groupID, out EnemyGroupConfig cfg))
@@ -108,10 +97,7 @@ public class EnemyManager : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Devuelve si un grupo tiene comunicación activa.
-    /// Si el grupo no existe, devuelve true por defecto.
-    /// </summary>
+    
     public bool GroupCanCommunicate(int groupID)
     {
         if (groupLookup.TryGetValue(groupID, out EnemyGroupConfig cfg))
@@ -124,11 +110,7 @@ public class EnemyManager : MonoBehaviour
 
     #region Alert System
 
-    /// <summary>
-    /// El enemigo 'sender' avisa a los cercanos del mismo grupo dentro de alertRadius.
-    /// combatAlert = true  → los receptores van directo a Chase (el jugador está siendo visto).
-    /// combatAlert = false → los receptores van a Investigate (posición de interés).
-    /// </summary>
+   
     public void AlertNearby(EnemyAIBase sender, Vector3 position, float alertRadius, bool combatAlert)
     {
         int senderGroup = sender.GroupID;
