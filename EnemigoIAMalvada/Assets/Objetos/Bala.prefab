@@ -31,7 +31,7 @@ Transform:
   m_GameObject: {fileID: 1380186656137554835}
   serializedVersion: 2
   m_LocalRotation: {x: 0.7071068, y: 0, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: 0.23081, y: 0.695, z: 28.325}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 0.3, y: 0.3, z: 0.3}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -157,6 +157,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Bullet
   speed: 40
   lifetime: 4
+  meshRotationOffset: {x: 90, y: 0, z: 0}
   ignoreLayer:
     serializedVersion: 2
     m_Bits: 0
