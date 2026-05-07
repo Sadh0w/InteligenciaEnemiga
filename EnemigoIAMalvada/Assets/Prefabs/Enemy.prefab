@@ -246,12 +246,13 @@ MonoBehaviour:
   playerLayer:
     serializedVersion: 2
     m_Bits: 64
-  obstacleLayer:
+  visionBlockerLayer:
     serializedVersion: 2
     m_Bits: 256
   sightRange: 82.7
   fieldOfViewAngle: 67
   eyeHeight: 0.4
+  visionSphereRadius: 0.05
   hearingRange: 16.2
   minSpeedToHear: 0.5
   attackRange: 24.2
@@ -270,6 +271,9 @@ MonoBehaviour:
   - {fileID: 0}
   investigateWaitTime: 4
   alertRadius: 20
+  groupID: 0
+  animator: {fileID: 0}
+  showDebugRays: 1
   aiUpdateFrequency: 0.2
 --- !u!195 &5916080423733988567
 NavMeshAgent:
