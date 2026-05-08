@@ -145,7 +145,7 @@ MonoBehaviour:
   hearingRange: 16.2
   minSpeedToHear: 0.5
   attackRange: 24.2
-  projectile: {fileID: 1380186656137554835, guid: 3a1928df5515a674684824e034f14165, type: 3}
+  projectile: {fileID: 3071333913417004175, guid: c7dff76d7f9b0254dad1d0643536f3c7, type: 3}
   shootPoint: {fileID: 3110134000153372592}
   shootForce: 60.4
   timeBetweenAttacks: 2

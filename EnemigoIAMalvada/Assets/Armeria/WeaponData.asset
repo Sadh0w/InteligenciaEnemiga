@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: WeaponData
   m_EditorClassIdentifier: Assembly-CSharp::WeaponData
   weaponName: Pistola
-  projectilePrefab: {fileID: 1380186656137554835, guid: 3a1928df5515a674684824e034f14165, type: 3}
+  projectilePrefab: {fileID: 3071333913417004175, guid: c7dff76d7f9b0254dad1d0643536f3c7, type: 3}
   shootForce: 25
   fireRate: 0.2
   totalAmmo: 12

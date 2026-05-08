@@ -62,6 +62,8 @@ public class Bullet : MonoBehaviour
         Destroy(gameObject, lifetime);
     }
 
+
+
     void OnCollisionEnter(Collision collision)
     {
         if (ignoreLayer != 0 &&
