@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.AI;
 
 public enum PatrolMode { Random, Waypoints }
-public enum EnemyState { Patrol, Investigate, Chase, Attack }
+public enum EnemyState { Patrol, Investigate, Chase, Attack, Cover, Flee }
 
 public class EnemyAIBase : MonoBehaviour
 {
@@ -18,6 +18,7 @@ public class EnemyAIBase : MonoBehaviour
     [Header("Layers")]
     [SerializeField] LayerMask playerLayer;
     [SerializeField] LayerMask visionBlockerLayer;
+    [SerializeField] LayerMask bulletLayer;   // layer de los proyectiles enemigos del jugador
 
     [Header("Vision")]
     [SerializeField] float sightRange = 15f;
@@ -33,13 +34,23 @@ public class EnemyAIBase : MonoBehaviour
     [SerializeField] float attackRange = 8f;
     [SerializeField] GameObject projectile;
     [SerializeField] Transform shootPoint;
-    // shootForce debe ser 0 si la bala tiene velocidad propia en Bullet.cs.
-    // Solo úsalo si el prefab de bala NO tiene Bullet.cs y necesita fuerza externa.
     [SerializeField] float shootForce = 0f;
     [SerializeField] float timeBetweenAttacks = 2f;
     [SerializeField] int bulletsPerBurst = 3;
     [SerializeField] float timeBetweenShots = 0.15f;
     [SerializeField] float suppressionTime = 2.5f;
+
+    [Header("Cover")]
+    [SerializeField] float coverSearchRadius = 20f;    // radio máximo para buscar cover
+    [SerializeField] float coverDuration = 4f;     // segundos máx en cobertura antes de flanquear
+    [SerializeField] float flankDistance = 6f;     // distancia del punto de flanqueo lateral
+
+    [Header("Flee")]
+    [SerializeField] bool canFlee = true;
+    // Si está solo (sin aliados en el grupo) también huye
+    [SerializeField] bool fleeWhenAlone = true;
+    // Radio dentro del cual el aliado se considera "alcanzado"
+    [SerializeField] float reachAllyRadius = 3f;
 
     [Header("Patrol")]
     [SerializeField] PatrolMode patrolMode = PatrolMode.Random;
@@ -59,6 +70,8 @@ public class EnemyAIBase : MonoBehaviour
     static readonly int HashSpeed = Animator.StringToHash("Speed");
     static readonly int HashShoot = Animator.StringToHash("Shoot");
     static readonly int HashAlert = Animator.StringToHash("Alert");
+    static readonly int HashCover = Animator.StringToHash("Cover");
+    static readonly int HashFlee = Animator.StringToHash("Flee");
 
     [Header("Debug")]
     [SerializeField] bool showDebugRays = true;
@@ -66,8 +79,9 @@ public class EnemyAIBase : MonoBehaviour
     [Header("Optimization")]
     [SerializeField] float aiUpdateFrequency = 0.15f;
 
-    // Estado
+    // ── Estado ────────────────────────────────────────────────────────────────
     EnemyState currentState = EnemyState.Patrol;
+    public EnemyState CurrentState => currentState;
 
     // Patrol
     int currentWaypointIndex;
@@ -87,6 +101,15 @@ public class EnemyAIBase : MonoBehaviour
     float chaseGracePeriod;
     const float CHASE_GRACE = 1.5f;
 
+    // Cover
+    Vector3 coverPoint;
+    bool coverPointSet;
+    float coverTimer;
+    bool wasHitRecently;    // flag: el jugador nos disparó
+
+    // Flee
+    EnemyAIBase fleeTarget;   // aliado hacia el que huimos
+
     Rigidbody targetRigidbody;
 
     #endregion
@@ -100,7 +123,9 @@ public class EnemyAIBase : MonoBehaviour
     }
 
     public bool IsCombatActive() =>
-        currentState == EnemyState.Chase || currentState == EnemyState.Attack;
+        currentState == EnemyState.Chase ||
+        currentState == EnemyState.Attack ||
+        currentState == EnemyState.Cover;
 
     public void ReceiveAlert(Vector3 position)
     {
@@ -110,8 +135,21 @@ public class EnemyAIBase : MonoBehaviour
 
     public void ReceivePlayerSpotted()
     {
-        if (currentState != EnemyState.Attack)
+        if (currentState != EnemyState.Attack && currentState != EnemyState.Cover)
             EnterChase();
+    }
+
+    // Llamado por EnemyHealth cuando recibe daño
+    public void OnDamageReceived()
+    {
+        wasHitRecently = true;
+    }
+
+    // Llamado por EnemyHealth cuando la vida baja del umbral
+    public void OnFleeThresholdReached()
+    {
+        if (canFlee)
+            EnterFlee();
     }
 
     #endregion
@@ -132,7 +170,7 @@ public class EnemyAIBase : MonoBehaviour
             }
             else
             {
-                Debug.LogError("EnemyAIBase: no se encontró ningún GameObject con tag 'Player'.");
+                Debug.LogError("EnemyAIBase: no se encontró ningún Player.");
                 enabled = false;
                 return;
             }
@@ -164,6 +202,14 @@ public class EnemyAIBase : MonoBehaviour
         }
     }
 
+    // ── Detección de proyectiles del jugador ─────────────────────────────────
+    void OnTriggerEnter(Collider other)
+    {
+        if (bulletLayer == 0) return;
+        if (((1 << other.gameObject.layer) & bulletLayer) != 0)
+            wasHitRecently = true;
+    }
+
     #endregion
 
     #region Detection
@@ -189,7 +235,6 @@ public class EnemyAIBase : MonoBehaviour
         Vector3 origin = transform.position + Vector3.up * eyeHeight;
         Vector3 targetPos = target.position + Vector3.up * eyeHeight;
         Vector3 dir = targetPos - origin;
-
         return CheckLineOfSight(origin, dir.normalized, dir.magnitude);
     }
 
@@ -239,6 +284,23 @@ public class EnemyAIBase : MonoBehaviour
         return dist <= attackRange && CanSeeTarget();
     }
 
+    // ¿El jugador está en cobertura respecto a este enemigo?
+    bool PlayerIsInCover()
+    {
+        Vector3 origin = transform.position + Vector3.up * eyeHeight;
+        Vector3 targetPos = target.position + Vector3.up * eyeHeight;
+        Vector3 dir = targetPos - origin;
+        LayerMask mask = visionBlockerLayer | playerLayer;
+
+        if (Physics.SphereCast(origin, visionSphereRadius, dir.normalized,
+                               out RaycastHit hit, dir.magnitude, mask))
+        {
+            // Si el primer objeto es un bloqueador (no el jugador), está en cobertura
+            return ((1 << hit.transform.gameObject.layer) & playerLayer) == 0;
+        }
+        return false;
+    }
+
     #endregion
 
     #region State Machine
@@ -279,6 +341,7 @@ public class EnemyAIBase : MonoBehaviour
                 break;
 
             case EnemyState.Attack:
+                // ── FIX: en cuanto pierde visión sale del estado de ataque ────
                 bool losNow = HasLineOfSight();
 
                 if (sees)
@@ -288,31 +351,85 @@ public class EnemyAIBase : MonoBehaviour
                     suppressionTimer = suppressionTime;
                     EnemyManager.Instance?.AlertNearby(this, lastKnownPosition, alertRadius, combatAlert: true);
 
+                    // El jugador está cubierto y nos dispararon → buscar cobertura
+                    if (wasHitRecently && PlayerIsInCover())
+                    {
+                        wasHitRecently = false;
+                        EnterCover();
+                        break;
+                    }
+
                     if (!InAttackRange()) EnterChase();
                 }
                 else if (losNow)
                 {
+                    // Tiene LOS pero salió del cono → perseguir
                     isSuppressing = false;
                     EnterChase();
                 }
-                else if (!isSuppressing)
-                {
-                    isSuppressing = true;
-                    suppressionTimer = suppressionTime;
-                    EnemyManager.Instance?.AlertNearby(this, lastKnownPosition, alertRadius, combatAlert: false);
-                }
                 else
                 {
-                    suppressionTimer -= aiUpdateFrequency;
-                    if (suppressionTimer <= 0f)
+                    // ── Perdió visión completamente: sale inmediatamente ──────
+                    // No hay supresión aquí: si otro enemigo ve al jugador,
+                    // este ya habrá recibido ReceivePlayerSpotted y entrado en Chase.
+                    // Si nadie lo ve, va a investigar el LKP.
+                    isSuppressing = false;
+                    EnterInvestigate(lastKnownPosition);
+                }
+                break;
+
+            case EnemyState.Cover:
+                coverTimer -= aiUpdateFrequency;
+
+                if (sees && !PlayerIsInCover())
+                {
+                    // El jugador salió de cobertura → atacar
+                    EnterAttackFromCover();
+                }
+                else if (coverTimer <= 0f)
+                {
+                    // Tiempo en cover agotado → flanquear
+                    EnterFlank();
+                }
+                else if (sees && wasHitRecently)
+                {
+                    // Nos siguen disparando → buscar mejor cover
+                    wasHitRecently = false;
+                    EnterCover();
+                }
+                break;
+
+            case EnemyState.Flee:
+                // Si el aliado ya fue eliminado, busca otro
+                if (fleeTarget == null || !fleeTarget.isActiveAndEnabled)
+                {
+                    fleeTarget = EnemyManager.Instance?.GetNearestAlly(this);
+                    if (fleeTarget == null)
                     {
-                        isSuppressing = false;
-                        EnterInvestigate(lastKnownPosition);
+                        // No hay más aliados → volver a patrullar
+                        EnterPatrol();
+                        break;
                     }
+                    agent.SetDestination(fleeTarget.transform.position);
+                }
+
+                // ¿Llegamos al aliado?
+                float distToAlly = Vector3.Distance(transform.position, fleeTarget.transform.position);
+                if (distToAlly <= reachAllyRadius)
+                {
+                    // Nos unimos al grupo del aliado
+                    groupID = fleeTarget.GroupID;
+                    EnterChase(); // retomamos combate con el contexto del aliado
                 }
                 break;
         }
+
+        // Resetea flag de hit después de procesarlo
+        if (currentState != EnemyState.Cover)
+            wasHitRecently = false;
     }
+
+    // ── Transiciones ──────────────────────────────────────────────────────────
 
     void EnterChase()
     {
@@ -334,6 +451,95 @@ public class EnemyAIBase : MonoBehaviour
         agent.SetDestination(lastKnownPosition);
     }
 
+    void EnterCover()
+    {
+        if (CoverSystem.Instance == null) { EnterChase(); return; }
+
+        Vector3 best = CoverSystem.Instance.GetBestCoverPoint(
+            transform.position, target.position, visionBlockerLayer);
+
+        if (best == Vector3.positiveInfinity)
+        {
+            // No hay cover disponible → flanquear directamente
+            EnterFlank();
+            return;
+        }
+
+        coverPoint = best;
+        coverPointSet = true;
+        coverTimer = coverDuration;
+        currentState = EnemyState.Cover;
+        agent.isStopped = false;
+        agent.SetDestination(coverPoint);
+    }
+
+    void EnterAttackFromCover()
+    {
+        currentState = EnemyState.Attack;
+        agent.isStopped = true;
+    }
+
+    void EnterFlank()
+    {
+        // Calcula un punto lateral al jugador
+        Vector3 toPlayer = (target.position - transform.position).normalized;
+        Vector3 lateral = Vector3.Cross(toPlayer, Vector3.up).normalized;
+
+        // Alterna izquierda/derecha aleatoriamente
+        if (Random.value > 0.5f) lateral = -lateral;
+
+        Vector3 flankPos = target.position + lateral * flankDistance;
+
+        if (NavMesh.SamplePosition(flankPos, out NavMeshHit hit, flankDistance, NavMesh.AllAreas))
+        {
+            currentState = EnemyState.Chase;
+            agent.isStopped = false;
+            agent.SetDestination(hit.position);
+        }
+        else
+        {
+            EnterChase(); // si no hay punto navegable, persigue directamente
+        }
+    }
+
+    void EnterFlee()
+    {
+        // Comprueba si debe huir o flanquear según condiciones
+        int allies = EnemyManager.Instance?.GetActiveAlliesInGroup(this) ?? 0;
+
+        if (!canFlee) return;
+
+        fleeTarget = EnemyManager.Instance?.GetNearestAlly(this);
+
+        if (fleeTarget == null && !fleeWhenAlone)
+        {
+            // No hay aliados y no está configurado para huir solo → flanquea
+            EnterFlank();
+            return;
+        }
+
+        currentState = EnemyState.Flee;
+        agent.isStopped = false;
+
+        if (fleeTarget != null)
+            agent.SetDestination(fleeTarget.transform.position);
+        else
+        {
+            // Sin aliados: huye en dirección contraria al jugador
+            Vector3 awayDir = (transform.position - target.position).normalized;
+            Vector3 fleePos = transform.position + awayDir * 15f;
+            if (NavMesh.SamplePosition(fleePos, out NavMeshHit hit, 15f, NavMesh.AllAreas))
+                agent.SetDestination(hit.position);
+        }
+    }
+
+    void EnterPatrol()
+    {
+        currentState = EnemyState.Patrol;
+        agent.isStopped = false;
+        walkPointSet = false;
+    }
+
     #endregion
 
     #region State Execution
@@ -346,6 +552,8 @@ public class EnemyAIBase : MonoBehaviour
             case EnemyState.Investigate: DoInvestigate(); break;
             case EnemyState.Chase: DoChase(); break;
             case EnemyState.Attack: DoAttack(); break;
+            case EnemyState.Cover: DoCover(); break;
+            case EnemyState.Flee: DoFlee(); break;
         }
 
         UpdateAnimator();
@@ -494,28 +702,30 @@ public class EnemyAIBase : MonoBehaviour
 
         for (int i = 0; i < shots; i++)
         {
+            // Sale si el estado cambió (fix: no dispara si ya no ve al jugador)
             if (currentState != EnemyState.Attack) break;
 
-            bool canShoot = wasSupressing || HasLineOfSight();
+            bool canShoot = HasLineOfSight();
             if (!canShoot) break;
 
             if (projectile != null && shootPoint != null)
             {
-                Quaternion shootRot = wasSupressing
-                    ? Quaternion.LookRotation(
-                        (lastKnownPosition + Vector3.up - shootPoint.position).normalized)
-                        * Quaternion.Euler(Random.Range(-5f, 5f), Random.Range(-8f, 8f), 0)
-                    : shootPoint.rotation;
+                Quaternion meshOffset = Quaternion.Euler(-90f, 0f, 0f);
+                Quaternion shootRot = shootPoint.rotation * meshOffset;
 
-                GameObject bullet = Instantiate(projectile, shootPoint.position, shootRot);
-
-                // Solo añade fuerza si shootForce > 0 y la bala no tiene Bullet.cs
-                // (Bullet.cs aplica su propia velocidad en Start, no necesita fuerza externa)
-                if (shootForce > 0f)
+                GameObject bullet = Instantiate(projectile, shootPoint.position, Quaternion.identity);
+                Bullet b = bullet.GetComponent<Bullet>();
+                if (b != null)
+                {
+                    b.SetDirection(shootPoint.forward);
+                    Collider enemyCol = GetComponent<Collider>();
+                    if (enemyCol != null) b.IgnoreCollider(enemyCol);
+                }
+                else if (shootForce > 0f)
                 {
                     Rigidbody rb = bullet.GetComponent<Rigidbody>();
-                    if (rb != null && bullet.GetComponent<Bullet>() == null)
-                        rb.AddForce(shootRot * Vector3.forward * shootForce, ForceMode.Impulse);
+                    if (rb != null)
+                        rb.AddForce(shootPoint.forward * shootForce, ForceMode.Impulse);
                 }
             }
 
@@ -524,6 +734,39 @@ public class EnemyAIBase : MonoBehaviour
 
         yield return new WaitForSeconds(cooldown);
         alreadyAttacked = false;
+    }
+
+    #endregion
+
+    #region Cover
+
+    void DoCover()
+    {
+        agent.isStopped = false;
+
+        // Mientras se mueve al cover, mira al jugador si lo ve
+        if (CanSeeTarget())
+        {
+            Vector3 lookDir = target.position - transform.position;
+            lookDir.y = 0;
+            if (lookDir != Vector3.zero)
+                transform.rotation = Quaternion.Slerp(
+                    transform.rotation,
+                    Quaternion.LookRotation(lookDir),
+                    6f * aiUpdateFrequency
+                );
+        }
+    }
+
+    #endregion
+
+    #region Flee
+
+    void DoFlee()
+    {
+        // Actualiza destino hacia el aliado en cada tick
+        if (fleeTarget != null && fleeTarget.isActiveAndEnabled)
+            agent.SetDestination(fleeTarget.transform.position);
     }
 
     #endregion
@@ -539,13 +782,17 @@ public class EnemyAIBase : MonoBehaviour
             EnemyState.Patrol => agent.velocity.magnitude,
             EnemyState.Investigate => agent.velocity.magnitude,
             EnemyState.Chase => agent.velocity.magnitude,
+            EnemyState.Cover => agent.velocity.magnitude,
+            EnemyState.Flee => agent.velocity.magnitude,
             EnemyState.Attack => 0f,
             _ => 0f
         };
 
         animator.SetFloat(HashSpeed, speed, 0.1f, Time.deltaTime);
-        animator.SetBool(HashShoot, currentState == EnemyState.Attack && !isSuppressing);
+        animator.SetBool(HashShoot, currentState == EnemyState.Attack);
         animator.SetBool(HashAlert, currentState == EnemyState.Investigate);
+        animator.SetBool(HashCover, currentState == EnemyState.Cover);
+        animator.SetBool(HashFlee, currentState == EnemyState.Flee);
     }
 
     #endregion
@@ -596,12 +843,8 @@ public class EnemyAIBase : MonoBehaviour
         }
 
         Gizmos.color = Color.yellow;
-        Vector3 leftEdge = Quaternion.Euler(0, -fieldOfViewAngle * 0.5f, 0) * fwd * sightRange;
-        Vector3 rightEdge = Quaternion.Euler(0, fieldOfViewAngle * 0.5f, 0) * fwd * sightRange;
-        Gizmos.DrawLine(eyePos, eyePos + leftEdge);
-        Gizmos.DrawLine(eyePos, eyePos + rightEdge);
-        Gizmos.color = new Color(1f, 1f, 0f, 0.08f);
-        Gizmos.DrawWireSphere(transform.position, sightRange);
+        Gizmos.DrawLine(eyePos, eyePos + Quaternion.Euler(0, -fieldOfViewAngle * 0.5f, 0) * fwd * sightRange);
+        Gizmos.DrawLine(eyePos, eyePos + Quaternion.Euler(0, fieldOfViewAngle * 0.5f, 0) * fwd * sightRange);
 
         Gizmos.color = new Color(0.2f, 0.6f, 1f, 0.35f);
         Gizmos.DrawWireSphere(transform.position, hearingRange);
@@ -612,11 +855,27 @@ public class EnemyAIBase : MonoBehaviour
         Gizmos.color = new Color(1f, 0.4f, 0f, 0.2f);
         Gizmos.DrawWireSphere(transform.position, alertRadius);
 
+        // Cover point activo
+        if (Application.isPlaying && currentState == EnemyState.Cover && coverPointSet)
+        {
+            Gizmos.color = Color.cyan;
+            Gizmos.DrawSphere(coverPoint, 0.3f);
+            Gizmos.DrawLine(transform.position, coverPoint);
+        }
+
+        // LKP
         if (Application.isPlaying && currentState == EnemyState.Investigate)
         {
             Gizmos.color = Color.magenta;
             Gizmos.DrawSphere(lastKnownPosition, 0.3f);
             Gizmos.DrawLine(transform.position, lastKnownPosition);
+        }
+
+        // Aliado en huida
+        if (Application.isPlaying && currentState == EnemyState.Flee && fleeTarget != null)
+        {
+            Gizmos.color = Color.white;
+            Gizmos.DrawLine(transform.position, fleeTarget.transform.position);
         }
     }
 
