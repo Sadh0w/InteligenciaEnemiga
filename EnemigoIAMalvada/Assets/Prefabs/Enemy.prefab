@@ -83,7 +83,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EnemyHealth
   maxHealth: 100
-  fleeThreshold: 24.9
+  fleeThreshold: 30
+  currentHealthDebug: 0
   OnDeath:
     m_PersistentCalls:
       m_Calls: []
@@ -104,7 +105,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyAIBase
   agent: {fileID: 5916080423733988567}
   target: {fileID: 0}
-  face: {fileID: 3767266761233667059}
+  face: {fileID: 0}
   playerLayer:
     serializedVersion: 2
     m_Bits: 64

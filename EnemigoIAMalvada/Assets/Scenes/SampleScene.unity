@@ -336,6 +336,11 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 181854558}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!95 &210455833 stripped
+Animator:
+  m_CorrespondingSourceObject: {fileID: 8612974839737147736, guid: bbb8d2cc588d3624186cff3f8fcfae12, type: 3}
+  m_PrefabInstance: {fileID: 1786298311}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &328722983
 GameObject:
   m_ObjectHideFlags: 0
@@ -1151,6 +1156,11 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 602618147}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!95 &615239956 stripped
+Animator:
+  m_CorrespondingSourceObject: {fileID: 8612974839737147736, guid: bbb8d2cc588d3624186cff3f8fcfae12, type: 3}
+  m_PrefabInstance: {fileID: 5758069118965562565}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &629143733
 GameObject:
   m_ObjectHideFlags: 0
@@ -2168,6 +2178,10 @@ PrefabInstance:
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 3746807608239899592, guid: bbb8d2cc588d3624186cff3f8fcfae12, type: 3}
+      propertyPath: animator
+      value: 
+      objectReference: {fileID: 210455833}
+    - target: {fileID: 3746807608239899592, guid: bbb8d2cc588d3624186cff3f8fcfae12, type: 3}
       propertyPath: alertRadius
       value: 76.5
       objectReference: {fileID: 0}
@@ -2887,7 +2901,7 @@ MonoBehaviour:
   camTransform: {fileID: 330585546}
   speed: 10
   rotSpeed: 15
-  jumpForce: 8
+  jumpForce: 0
   groundCheck: {fileID: 2024702786}
   groundCheckRadius: 0.5
   groundLayer:
@@ -3510,6 +3524,10 @@ PrefabInstance:
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 3746807608239899592, guid: bbb8d2cc588d3624186cff3f8fcfae12, type: 3}
+      propertyPath: animator
+      value: 
+      objectReference: {fileID: 615239956}
+    - target: {fileID: 3746807608239899592, guid: bbb8d2cc588d3624186cff3f8fcfae12, type: 3}
       propertyPath: sightRange
       value: 72.9
       objectReference: {fileID: 0}
@@ -3544,6 +3562,14 @@ PrefabInstance:
     - target: {fileID: 3746807608239899592, guid: bbb8d2cc588d3624186cff3f8fcfae12, type: 3}
       propertyPath: visionBlockerLayer.m_Bits
       value: 256
+      objectReference: {fileID: 0}
+    - target: {fileID: 4684908866335667035, guid: bbb8d2cc588d3624186cff3f8fcfae12, type: 3}
+      propertyPath: maxHealth
+      value: 100
+      objectReference: {fileID: 0}
+    - target: {fileID: 4684908866335667035, guid: bbb8d2cc588d3624186cff3f8fcfae12, type: 3}
+      propertyPath: fleeThreshold
+      value: 30
       objectReference: {fileID: 0}
     - target: {fileID: 6057300347230732706, guid: bbb8d2cc588d3624186cff3f8fcfae12, type: 3}
       propertyPath: m_Name

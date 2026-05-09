@@ -556,7 +556,7 @@ public class EnemyAIBase : MonoBehaviour
             case EnemyState.Flee: DoFlee(); break;
         }
 
-        UpdateAnimator();
+        //UpdateAnimator();
     }
 
     #endregion
@@ -772,7 +772,7 @@ public class EnemyAIBase : MonoBehaviour
     #endregion
 
     #region Animation
-
+    /*
     void UpdateAnimator()
     {
         if (animator == null) return;
@@ -794,7 +794,7 @@ public class EnemyAIBase : MonoBehaviour
         animator.SetBool(HashCover, currentState == EnemyState.Cover);
         animator.SetBool(HashFlee, currentState == EnemyState.Flee);
     }
-
+    */
     #endregion
 
     #region Gizmos

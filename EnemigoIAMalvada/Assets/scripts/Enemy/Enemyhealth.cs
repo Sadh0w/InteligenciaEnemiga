@@ -1,26 +1,22 @@
 using UnityEngine;
 using UnityEngine.Events;
 
-/// <summary>
-/// Sistema de salud del enemigo.
-/// Notifica al EnemyAIBase cuando recibe daño o muere.
-///
-/// Setup: añade este componente al mismo GameObject que EnemyAIBase.
-/// Las balas deben llamar a TakeDamage() al impactar.
-/// </summary>
 public class EnemyHealth : MonoBehaviour
 {
     [Header("Salud")]
     [SerializeField] float maxHealth = 100f;
-    [SerializeField] float fleeThreshold = 30f;  // % de vida al que empieza a huir (0-100)
+    [SerializeField] float fleeThreshold = 30f;
+
+    [Header("Debug — visible durante Play")]
+    [SerializeField] float currentHealthDebug; // solo para ver en Inspector
 
     [Header("Eventos")]
     public UnityEvent OnDeath;
-    public UnityEvent<float> OnDamaged;  // pasa la vida actual
+    public UnityEvent<float> OnDamaged;
 
     float currentHealth;
     EnemyAIBase aiBase;
-    bool hasFledThisLife; // evita activar la huida múltiples veces
+    bool hasFledThisLife;
 
     public float CurrentHealth => currentHealth;
     public float MaxHealth => maxHealth;
@@ -31,22 +27,21 @@ public class EnemyHealth : MonoBehaviour
     {
         aiBase = GetComponent<EnemyAIBase>();
         currentHealth = maxHealth;
+        currentHealthDebug = currentHealth;
     }
 
-    /// <summary>
-    /// Aplica daño al enemigo. Llamar desde el script de la bala al impactar.
-    /// </summary>
     public void TakeDamage(float amount)
     {
         if (IsDead) return;
 
         currentHealth = Mathf.Max(0f, currentHealth - amount);
-        OnDamaged?.Invoke(currentHealth);
+        currentHealthDebug = currentHealth; // actualiza el debug visible
 
-        // Avisa a la IA del daño recibido
+        Debug.Log($"[Health] {gameObject.name}: {currentHealth}/{maxHealth} (-{amount})");
+
+        OnDamaged?.Invoke(currentHealth);
         aiBase?.OnDamageReceived();
 
-        // Comprueba umbral de huida
         if (!hasFledThisLife && HealthPercent <= fleeThreshold)
         {
             hasFledThisLife = true;
@@ -59,8 +54,8 @@ public class EnemyHealth : MonoBehaviour
 
     void Die()
     {
+        Debug.Log($"[Health] {gameObject.name} eliminado.");
         OnDeath?.Invoke();
-        // La IA se desactiva, el EnemyManager lo desregistra automáticamente via OnDisable
         gameObject.SetActive(false);
     }
 }

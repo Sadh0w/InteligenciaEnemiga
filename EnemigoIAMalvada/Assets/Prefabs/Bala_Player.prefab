@@ -11,8 +11,9 @@ GameObject:
   - component: {fileID: 2371444781705242082}
   - component: {fileID: 8573810477053914916}
   - component: {fileID: 7159891951130206395}
+  - component: {fileID: 7312944159128521863}
   m_Layer: 10
-  m_Name: Bala
+  m_Name: Bala_Player
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -78,7 +79,28 @@ MonoBehaviour:
   damage: 25
   ignoreLayer:
     serializedVersion: 2
-    m_Bits: 192
+    m_Bits: 64
+--- !u!65 &7312944159128521863
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3071333913417004175}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 1, y: 0.999279, z: 2.0176375}
+  m_Center: {x: 0, y: -0.0003604889, z: 0.0015255213}
 --- !u!1 &8435276050847072183
 GameObject:
   m_ObjectHideFlags: 0
@@ -91,7 +113,6 @@ GameObject:
   - component: {fileID: 4194672994066910443}
   - component: {fileID: 5477928908484266150}
   - component: {fileID: 8525519442475915538}
-  - component: {fileID: 4161222851246184907}
   m_Layer: 0
   m_Name: 'Mesh '
   m_TagString: Untagged
@@ -147,7 +168,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 6f915d426be3ae043b77e2d9404256ef, type: 2}
+  - {fileID: 2100000, guid: 0afee315a94a1a141a387b155f3dd5c0, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -280,26 +301,3 @@ TrailRenderer:
   m_Autodestruct: 0
   m_Emitting: 1
   m_ApplyActiveColorSpace: 1
---- !u!136 &4161222851246184907
-CapsuleCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8435276050847072183}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 2
-  m_Radius: 0.5000001
-  m_Height: 2.0000005
-  m_Direction: 1
-  m_Center: {x: 0, y: 0, z: 0}
