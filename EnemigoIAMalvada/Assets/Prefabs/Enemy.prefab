@@ -121,7 +121,7 @@ MonoBehaviour:
   agent: {fileID: 5916080423733988567}
   target: {fileID: 0}
   face: {fileID: 0}
-  moveSpeed: 48.71
+  moveSpeed: 20
   playerLayer:
     serializedVersion: 2
     m_Bits: 64

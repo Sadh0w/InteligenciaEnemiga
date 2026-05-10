@@ -2329,6 +2329,10 @@ PrefabInstance:
       propertyPath: visionBlockerLayer.m_Bits
       value: 256
       objectReference: {fileID: 0}
+    - target: {fileID: 5916080423733988567, guid: bbb8d2cc588d3624186cff3f8fcfae12, type: 3}
+      propertyPath: avoidancePriority
+      value: 60
+      objectReference: {fileID: 0}
     - target: {fileID: 6057300347230732706, guid: bbb8d2cc588d3624186cff3f8fcfae12, type: 3}
       propertyPath: m_Name
       value: Enemy (1)
