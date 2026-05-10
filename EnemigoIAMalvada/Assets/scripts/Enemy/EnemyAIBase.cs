@@ -797,18 +797,20 @@ public class EnemyAIBase : MonoBehaviour
     {
         if (animator == null) return;
 
-        float speed = currentState switch
+        // Si el estado es Attack, forzamos la velocidad a 0 sin suavizado (damping)
+        // para que pase a la animación de disparar/idle al instante.
+        if (currentState == EnemyState.Attack)
         {
-            EnemyState.Patrol => agent.velocity.magnitude,
-            EnemyState.Investigate => agent.velocity.magnitude,
-            EnemyState.Chase => agent.velocity.magnitude,
-            EnemyState.Cover => agent.velocity.magnitude,
-            EnemyState.Flee => agent.velocity.magnitude,
-            EnemyState.Attack => 0f,
-            _ => 0f
-        };
+            animator.SetFloat(HashSpeed, 0f);
+        }
+        else
+        {
+            // Para el resto de estados, usamos la velocidad del agent con un pequeño suavizado
+            float speed = agent.velocity.magnitude;
+            animator.SetFloat(HashSpeed, speed, 0.1f, Time.deltaTime);
+        }
 
-        animator.SetFloat(HashSpeed, speed, 0.1f, Time.deltaTime);
+        // Actualización de los booleanos de estado
         animator.SetBool(HashShoot, currentState == EnemyState.Attack);
         animator.SetBool(HashAlert, currentState == EnemyState.Investigate);
         animator.SetBool(HashCover, currentState == EnemyState.Cover);
