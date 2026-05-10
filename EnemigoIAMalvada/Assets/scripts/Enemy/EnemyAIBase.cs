@@ -592,7 +592,7 @@ public class EnemyAIBase : MonoBehaviour
         }
 
         walkPoint = waypoints[currentWaypointIndex].position;
-        agent.SetDestination(walkPoint);
+        agent.SetDestination(walkPoint); walkPointSet = true;
         walkPointSet = true;
         currentWaypointIndex = (currentWaypointIndex + 1) % waypoints.Count;
     }
