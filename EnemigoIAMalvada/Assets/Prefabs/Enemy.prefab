@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 7923430680008143884}
   - component: {fileID: 4684908866335667035}
   - component: {fileID: 3746807608239899592}
+  - component: {fileID: 3714769446959523297}
   - component: {fileID: 5916080423733988567}
   - component: {fileID: 5830147854724080959}
   m_Layer: 7
@@ -32,7 +33,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0.32, z: 26.35}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 5, y: 5, z: 5}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 3767266761233667059}
@@ -84,10 +85,24 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyHealth
   maxHealth: 100
   fleeThreshold: 30
+  hitColor: {r: 1, g: 0, b: 0, a: 1}
+  flashDuration: 0.2
   currentHealthDebug: 0
   OnDeath:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 3714769446959523297}
+        m_TargetAssemblyTypeName: EnemyLootDrop, Assembly-CSharp
+        m_MethodName: DropLoot
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
   OnDamaged:
     m_PersistentCalls:
       m_Calls: []
@@ -106,6 +121,7 @@ MonoBehaviour:
   agent: {fileID: 5916080423733988567}
   target: {fileID: 0}
   face: {fileID: 0}
+  moveSpeed: 48.71
   playerLayer:
     serializedVersion: 2
     m_Bits: 64
@@ -147,6 +163,20 @@ MonoBehaviour:
   animator: {fileID: 0}
   showDebugRays: 1
   aiUpdateFrequency: 0.2
+--- !u!114 &3714769446959523297
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6057300347230732706}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7d6f13e2a24d9a64dad30ae46f68c751, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyLootDrop
+  lootPrefab: {fileID: 6059286609875224079, guid: 9fecceecead941b468b3899bf7afe970, type: 3}
+  spawnOffset: {x: 0, y: 0.5, z: 0}
 --- !u!195 &5916080423733988567
 NavMeshAgent:
   m_ObjectHideFlags: 0

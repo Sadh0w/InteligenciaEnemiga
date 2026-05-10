@@ -2,12 +2,11 @@
 using UnityEngine;
 
 /// <summary>
-/// Singleton que escanea la escena buscando objetos con la layer 'visionBlockerLayer'
+/// Singleton que escanea la escena buscando objetos con obstacleLayer
 /// y genera puntos de cobertura candidatos alrededor de cada uno.
-/// Los enemigos lo consultan para encontrar el mejor cover disponible.
 ///
-/// Setup: crea un GameObject vacío en la escena, llámalo "CoverSystem" y asígnale este script.
-/// Asigna en el Inspector la misma layer que usas como visionBlockerLayer en los enemigos.
+/// Setup: crea un GameObject vacío llamado "CoverSystem" y asígnale este script.
+/// Asigna la misma layer que visionBlockerLayer en los enemigos.
 /// </summary>
 public class CoverSystem : MonoBehaviour
 {
@@ -18,11 +17,18 @@ public class CoverSystem : MonoBehaviour
     [SerializeField] LayerMask obstacleLayer;
 
     [Header("Generación de puntos")]
-    [SerializeField] float pointOffset = 1.5f;  // distancia del punto al borde del obstáculo
+    [SerializeField] float pointOffset = 1.5f;  // distancia del punto al borde
     [SerializeField] float validationHeight = 1.0f;  // altura del raycast de validación
 
-    // Cache de puntos generados
+    [Header("Debug")]
+    [SerializeField] bool showGizmos = true;
+    [SerializeField] Color gizmoColor = new Color(0f, 1f, 0.5f, 0.6f);
+    [SerializeField] float gizmoSphereSize = 0.25f;
+
     readonly List<Vector3> coverPoints = new();
+
+    // Expuesto para que los gizmos funcionen en Edit mode también
+    public IReadOnlyList<Vector3> CoverPoints => coverPoints;
 
     void Awake()
     {
@@ -31,36 +37,48 @@ public class CoverSystem : MonoBehaviour
         ScanScene();
     }
 
+    // Escanea también en Edit mode para ver los puntos sin Play
+    void OnValidate() => ScanScene();
+
     /// <summary>
-    /// Escanea todos los objetos con obstacleLayer y genera 4 puntos alrededor de cada uno.
-    /// Llama a esto si añades obstáculos en runtime.
+    /// Escanea todos los colliders con obstacleLayer y genera puntos alrededor.
     /// </summary>
     public void ScanScene()
     {
         coverPoints.Clear();
 
-        // Encuentra todos los colliders en la layer de obstáculos
+        if (obstacleLayer == 0)
+        {
+            Debug.LogWarning("[CoverSystem] Obstacle Layer no asignada.");
+            return;
+        }
+
         Collider[] obstacles = Physics.OverlapSphere(Vector3.zero, 500f, obstacleLayer);
 
         foreach (var col in obstacles)
         {
             Bounds b = col.bounds;
 
-            // 4 puntos cardinales alrededor del obstáculo
-            coverPoints.Add(new Vector3(b.center.x + b.extents.x + pointOffset, b.center.y, b.center.z));
-            coverPoints.Add(new Vector3(b.center.x - b.extents.x - pointOffset, b.center.y, b.center.z));
-            coverPoints.Add(new Vector3(b.center.x, b.center.y, b.center.z + b.extents.z + pointOffset));
-            coverPoints.Add(new Vector3(b.center.x, b.center.y, b.center.z - b.extents.z - pointOffset));
+            // 4 puntos cardinales
+            TryAddPoint(new Vector3(b.center.x + b.extents.x + pointOffset, b.min.y + 0.1f, b.center.z));
+            TryAddPoint(new Vector3(b.center.x - b.extents.x - pointOffset, b.min.y + 0.1f, b.center.z));
+            TryAddPoint(new Vector3(b.center.x, b.min.y + 0.1f, b.center.z + b.extents.z + pointOffset));
+            TryAddPoint(new Vector3(b.center.x, b.min.y + 0.1f, b.center.z - b.extents.z - pointOffset));
         }
+
+        Debug.Log($"[CoverSystem] {coverPoints.Count} puntos de cobertura generados desde {obstacles.Length} obstáculos.");
+    }
+
+    void TryAddPoint(Vector3 point)
+    {
+        // Solo añade el punto si está sobre el NavMesh
+        if (UnityEngine.AI.NavMesh.SamplePosition(point, out UnityEngine.AI.NavMeshHit hit, 1f, UnityEngine.AI.NavMesh.AllAreas))
+            coverPoints.Add(hit.position);
     }
 
     /// <summary>
-    /// Devuelve el mejor punto de cobertura para un enemigo dado su posición y la del jugador.
-    /// Un punto es válido si:
-    ///   1. Un obstáculo bloquea la línea de visión entre ese punto y el jugador.
-    ///   2. El punto es alcanzable (está en el NavMesh).
-    ///   3. Es el más cercano al enemigo entre los válidos.
-    /// Devuelve Vector3.positiveInfinity si no hay ninguno válido.
+    /// Devuelve el mejor punto de cobertura para un enemigo.
+    /// Un punto es válido si un obstáculo bloquea la línea de visión hacia el jugador.
     /// </summary>
     public Vector3 GetBestCoverPoint(Vector3 enemyPos, Vector3 playerPos, LayerMask blockerLayer)
     {
@@ -69,10 +87,8 @@ public class CoverSystem : MonoBehaviour
 
         foreach (var point in coverPoints)
         {
-            // ¿El punto está oculto del jugador?
             if (!IsHiddenFromPlayer(point, playerPos, blockerLayer)) continue;
 
-            // ¿Es más cercano que el mejor hasta ahora?
             float dist = Vector3.Distance(enemyPos, point);
             if (dist < bestDist)
             {
@@ -81,30 +97,35 @@ public class CoverSystem : MonoBehaviour
             }
         }
 
+        if (best == Vector3.positiveInfinity)
+            Debug.Log("[CoverSystem] No se encontró ningún punto de cobertura válido.");
+
         return best;
     }
 
-    /// <summary>
-    /// Comprueba si un punto está oculto del jugador por un obstáculo.
-    /// </summary>
     bool IsHiddenFromPlayer(Vector3 point, Vector3 playerPos, LayerMask blockerLayer)
     {
         Vector3 checkPos = point + Vector3.up * validationHeight;
         Vector3 playerEye = playerPos + Vector3.up * validationHeight;
         Vector3 dir = playerEye - checkPos;
 
-        // Si el primer objeto golpeado es un bloqueador → el punto está oculto
-        if (Physics.Raycast(checkPos, dir.normalized, out RaycastHit hit, dir.magnitude, blockerLayer))
-            return true;
-
-        return false;
+        return Physics.Raycast(checkPos, dir.normalized, dir.magnitude, blockerLayer);
     }
 
     void OnDrawGizmos()
     {
-        if (!Application.isPlaying) return;
-        Gizmos.color = new Color(0f, 1f, 0.5f, 0.4f);
+        if (!showGizmos) return;
+
+        // Escanea en Edit mode para mostrar puntos sin necesidad de Play
+        if (!Application.isPlaying)
+            ScanScene();
+
+        Gizmos.color = gizmoColor;
         foreach (var p in coverPoints)
-            Gizmos.DrawSphere(p, 0.2f);
+        {
+            Gizmos.DrawSphere(p, gizmoSphereSize);
+            // Dibuja una línea vertical para verlos mejor desde arriba (vista cenital)
+            Gizmos.DrawLine(p, p + Vector3.up * 1.5f);
+        }
     }
 }

@@ -27,24 +27,17 @@ public class Bullet : MonoBehaviour
 
     void Start()
     {
-        // Si nadie llamó SetDirection, usa transform.forward como fallback
         if (!directionSet)
             Launch(transform.forward);
 
         Destroy(gameObject, lifetime);
     }
 
-    /// <summary>
-    /// Asigna dirección y lanza la bala. Llamar justo después de Instantiate.
-    /// Al llamarlo antes de Start(), garantiza que la velocidad es correcta.
-    /// </summary>
     public void SetDirection(Vector3 direction)
     {
         travelDirection = direction.normalized;
         directionSet = true;
 
-        // Si Awake ya corrió, aplica la velocidad ahora mismo
-        // Si no, Start() lo hará
         if (rb != null)
             Launch(travelDirection);
     }
@@ -56,7 +49,6 @@ public class Bullet : MonoBehaviour
 
     public void IgnoreCollider(Collider col)
     {
-        // Busca en el root y en hijos
         Collider own = GetComponentInChildren<Collider>();
         if (own != null && col != null)
             Physics.IgnoreCollision(own, col);
@@ -64,14 +56,30 @@ public class Bullet : MonoBehaviour
 
     void OnCollisionEnter(Collision collision)
     {
+        // Ignora layers configuradas (quien disparó)
         if (ignoreLayer != 0 &&
             ((1 << collision.gameObject.layer) & ignoreLayer) != 0)
             return;
 
-        EnemyHealth health = collision.gameObject.GetComponent<EnemyHealth>();
-        if (health != null)
-            health.TakeDamage(damage);
+        // ¿Es un enemigo?
+        EnemyHealth enemyHealth = collision.gameObject.GetComponentInParent<EnemyHealth>();
+        if (enemyHealth != null)
+        {
+            enemyHealth.TakeDamage(damage);
+            Destroy(gameObject);
+            return;
+        }
 
+        // ¿Es el jugador?
+        PlayerHealth playerHealth = collision.gameObject.GetComponentInParent<PlayerHealth>();
+        if (playerHealth != null)
+        {
+            playerHealth.TakeDamage();
+            Destroy(gameObject);
+            return;
+        }
+
+        // Cualquier otra cosa (pared, suelo...)
         Destroy(gameObject);
     }
 }

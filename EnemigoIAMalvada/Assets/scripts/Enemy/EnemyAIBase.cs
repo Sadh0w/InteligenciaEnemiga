@@ -15,6 +15,9 @@ public class EnemyAIBase : MonoBehaviour
     [SerializeField] Transform target;
     [SerializeField] Transform face;
 
+    [Header("Movement")]
+    [SerializeField] float moveSpeed = 3.5f; // velocidad de movimiento aplicada al NavMeshAgent
+
     [Header("Layers")]
     [SerializeField] LayerMask playerLayer;
     [SerializeField] LayerMask visionBlockerLayer;
@@ -122,6 +125,17 @@ public class EnemyAIBase : MonoBehaviour
         set => groupID = value;
     }
 
+    // Propiedad de solo lectura para consultar la velocidad actual
+    public float MoveSpeed => moveSpeed;
+
+    // Permite cambiar la velocidad en tiempo de ejecución y aplicarla al NavMeshAgent
+    public void SetMoveSpeed(float speed)
+    {
+        moveSpeed = Mathf.Max(0f, speed);
+        if (agent != null)
+            agent.speed = moveSpeed;
+    }
+
     public bool IsCombatActive() =>
         currentState == EnemyState.Chase ||
         currentState == EnemyState.Attack ||
@@ -159,6 +173,10 @@ public class EnemyAIBase : MonoBehaviour
     void Awake()
     {
         agent = GetComponent<NavMeshAgent>();
+
+        // Asegura que el NavMeshAgent use la velocidad configurada en el Inspector
+        if (agent != null)
+            agent.speed = moveSpeed;
 
         if (target == null)
         {
@@ -370,9 +388,6 @@ public class EnemyAIBase : MonoBehaviour
                 else
                 {
                     // ── Perdió visión completamente: sale inmediatamente ──────
-                    // No hay supresión aquí: si otro enemigo ve al jugador,
-                    // este ya habrá recibido ReceivePlayerSpotted y entrado en Chase.
-                    // Si nadie lo ve, va a investigar el LKP.
                     isSuppressing = false;
                     EnterInvestigate(lastKnownPosition);
                 }
