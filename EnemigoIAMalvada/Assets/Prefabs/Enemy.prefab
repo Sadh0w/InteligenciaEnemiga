@@ -137,10 +137,10 @@ MonoBehaviour:
     m_Bits: 128
   sightRange: 72.9
   fieldOfViewAngle: 74
-  eyeHeight: 0.4
+  eyeHeight: 2.89
   visionSphereRadius: 0.05
   hearingRange: 16.2
-  minSpeedToHear: 0.5
+  minSpeedToHear: 1.34
   attackRange: 127
   projectile: {fileID: 3071333913417004175, guid: c7dff76d7f9b0254dad1d0643536f3c7, type: 3}
   shootPoint: {fileID: 3110134000153372592}
@@ -224,7 +224,7 @@ SphereCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Radius: 3.52
+  m_Radius: 5
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &7122894591528396949
 GameObject:
