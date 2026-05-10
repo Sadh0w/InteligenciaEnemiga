@@ -18,7 +18,7 @@ GameObject:
   - component: {fileID: 5830147854724080959}
   m_Layer: 7
   m_Name: Enemy
-  m_TagString: Untagged
+  m_TagString: Enemy
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -38,6 +38,7 @@ Transform:
   m_Children:
   - {fileID: 3767266761233667059}
   - {fileID: 3110134000153372592}
+  - {fileID: 6107383614398073208}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!33 &2043205490430093929
@@ -120,7 +121,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyAIBase
   agent: {fileID: 5916080423733988567}
   target: {fileID: 0}
-  face: {fileID: 0}
+  face: {fileID: 6107383614398073208}
   moveSpeed: 20
   playerLayer:
     serializedVersion: 2
@@ -131,20 +132,25 @@ MonoBehaviour:
   bulletLayer:
     serializedVersion: 2
     m_Bits: 1024
-  sightRange: 82.7
-  fieldOfViewAngle: 67
+  enemyLayer:
+    serializedVersion: 2
+    m_Bits: 128
+  sightRange: 72.9
+  fieldOfViewAngle: 74
   eyeHeight: 0.4
   visionSphereRadius: 0.05
   hearingRange: 16.2
   minSpeedToHear: 0.5
-  attackRange: 24.2
+  attackRange: 127
   projectile: {fileID: 3071333913417004175, guid: c7dff76d7f9b0254dad1d0643536f3c7, type: 3}
   shootPoint: {fileID: 3110134000153372592}
   shootForce: 60.4
-  timeBetweenAttacks: 3
+  timeBetweenAttacks: 5
   bulletsPerBurst: 1
   timeBetweenShots: 0.15
   suppressionTime: 2.5
+  separationRadius: 2
+  destinationOffset: 1.5
   coverSearchRadius: 20
   coverDuration: 4
   flankDistance: 6
@@ -158,9 +164,9 @@ MonoBehaviour:
   - {fileID: 0}
   - {fileID: 0}
   investigateWaitTime: 4
-  alertRadius: 20
-  groupID: 0
-  animator: {fileID: 0}
+  alertRadius: 131.5
+  groupID: 1
+  animator: {fileID: 8612974839737147736}
   showDebugRays: 1
   aiUpdateFrequency: 0.2
 --- !u!114 &3714769446959523297
@@ -220,6 +226,37 @@ SphereCollider:
   serializedVersion: 3
   m_Radius: 3.52
   m_Center: {x: 0, y: 0, z: 0}
+--- !u!1 &7122894591528396949
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6107383614398073208}
+  m_Layer: 7
+  m_Name: face
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6107383614398073208
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7122894591528396949}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 3441324291078712220}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &9201628002894679590
 GameObject:
   m_ObjectHideFlags: 0
@@ -311,6 +348,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: -809828480950454423, guid: c8137e37436d7c041bd07a6c20eebe0a, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: addbee7c12412684b811533d682fbde1, type: 2}
     - target: {fileID: 919132149155446097, guid: c8137e37436d7c041bd07a6c20eebe0a, type: 3}
       propertyPath: m_Name
       value: enemigo proyecto 40h con Animacion
